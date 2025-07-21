@@ -1,12 +1,46 @@
 const dataStorage = require('./data-storage');
+const { getUserId } = require('./auth');
+
+// Helper function to clean track data and prevent circular references
+function cleanTrackData(track, category, selected = false, extraData = {}) {
+  return {
+    id: track.id,
+    name: track.name,
+    artists: track.artists?.map(a => ({ name: a.name, id: a.id })) || [],
+    album: {
+      name: track.album?.name || 'Unknown',
+      images: track.album?.images || []
+    },
+    duration_ms: track.duration_ms,
+    popularity: track.popularity,
+    external_urls: track.external_urls,
+    category,
+    selected,
+    ...extraData
+  };
+}
 
 async function generateRecommendationsPage(req, res) {
   try {
+    // Get user ID from session
+    const userId = getUserId(req);
+    if (!userId) {
+      return `
+        <html>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h2>🔐 Authentication Required</h2>
+            <p>Please login with Spotify to access recommendations.</p>
+            <a href="/auth/login" style="background: #1db954; color: white; text-decoration: none; padding: 12px 24px; border-radius: 25px;">Login with Spotify</a>
+          </body>
+        </html>
+      `;
+    }
+
     // Load user data to show track selection
-    const userData = await dataStorage.loadUserData();
+    const userData = await dataStorage.loadUserData(userId);
     
     if (!userData || !userData.profile) {
-      return res.send(`
+      return `
         <html>
           <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
             <h2>🎵 No Music Data Available</h2>
@@ -14,7 +48,7 @@ async function generateRecommendationsPage(req, res) {
             <a href="/collect-data" style="background: #1db954; color: white; text-decoration: none; padding: 12px 24px; border-radius: 25px;">Collect My Data</a>
           </body>
         </html>
-      `);
+      `;
     }
 
     // Prepare track selection data
@@ -23,22 +57,14 @@ async function generateRecommendationsPage(req, res) {
     // Add top tracks from different periods
     if (userData.topTracks.short_term) {
       userData.topTracks.short_term.forEach(track => {
-        allTracks.push({
-          ...track,
-          category: 'Top Tracks - Last 4 Weeks',
-          selected: true // Pre-select recent favorites
-        });
+        allTracks.push(cleanTrackData(track, 'Top Tracks - Last 4 Weeks', true));
       });
     }
     
     if (userData.topTracks.medium_term) {
       userData.topTracks.medium_term.forEach(track => {
         if (!allTracks.find(t => t.id === track.id)) { // Avoid duplicates
-          allTracks.push({
-            ...track,
-            category: 'Top Tracks - Last 6 Months',
-            selected: true // Pre-select medium term favorites
-          });
+          allTracks.push(cleanTrackData(track, 'Top Tracks - Last 6 Months', true));
         }
       });
     }
@@ -46,11 +72,7 @@ async function generateRecommendationsPage(req, res) {
     if (userData.topTracks.long_term) {
       userData.topTracks.long_term.forEach(track => {
         if (!allTracks.find(t => t.id === track.id)) {
-          allTracks.push({
-            ...track,
-            category: 'Top Tracks - All Time',
-            selected: false // Don't pre-select older tracks
-          });
+          allTracks.push(cleanTrackData(track, 'Top Tracks - All Time', false));
         }
       });
     }
@@ -59,12 +81,7 @@ async function generateRecommendationsPage(req, res) {
     if (userData.recentlyPlayed) {
       userData.recentlyPlayed.forEach(item => {
         if (!allTracks.find(t => t.id === item.track.id)) {
-          allTracks.push({
-            ...item.track,
-            category: 'Recently Played',
-            played_at: item.played_at,
-            selected: false // Don't pre-select recent plays
-          });
+          allTracks.push(cleanTrackData(item.track, 'Recently Played', false, { played_at: item.played_at }));
         }
       });
     }
@@ -73,12 +90,7 @@ async function generateRecommendationsPage(req, res) {
     if (userData.savedTracks) {
       userData.savedTracks.forEach(item => {
         if (!allTracks.find(t => t.id === item.track.id)) {
-          allTracks.push({
-            ...item.track,
-            category: 'Saved Tracks',
-            added_at: item.added_at,
-            selected: false // Don't pre-select saved tracks
-          });
+          allTracks.push(cleanTrackData(item.track, 'Saved Tracks', false, { added_at: item.added_at }));
         }
       });
     }

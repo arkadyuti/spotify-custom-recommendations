@@ -1,5 +1,6 @@
 const spotifyAPI = require('./spotify-api');
 const dataStorage = require('./data-storage');
+const { getUserId } = require('./auth');
 
 class DataCollector {
   constructor() {
@@ -23,9 +24,9 @@ class DataCollector {
   }
 
   // Load existing data from storage
-  async loadExistingData() {
+  async loadExistingData(userId) {
     try {
-      const existingData = await dataStorage.loadUserData();
+      const existingData = await dataStorage.loadUserData(userId);
       if (existingData) {
         this.userData = existingData;
         console.log('📁 Loaded existing user data from storage');
@@ -38,13 +39,20 @@ class DataCollector {
     }
   }
 
-  async collectUserData(forceRefresh = false) {
+  async collectUserData(req, forceRefresh = false) {
     console.log('Starting data collection...');
+    
+    const userId = getUserId(req);
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+
+    const api = spotifyAPI.create(req);
     
     try {
       // Check if we should use existing data
       if (!forceRefresh) {
-        const hasExisting = await this.loadExistingData();
+        const hasExisting = await this.loadExistingData(userId);
         if (hasExisting) {
           console.log('✅ Using existing data (add ?refresh=true to force update)');
           return this.userData;
@@ -52,32 +60,32 @@ class DataCollector {
       }
       // Get user profile
       console.log('Fetching user profile...');
-      this.userData.profile = await spotifyAPI.getMe();
+      this.userData.profile = await api.getMe();
       console.log(`Hello, ${this.userData.profile.display_name}!`);
 
       // Get top tracks for different time ranges
       console.log('Fetching top tracks...');
       for (const timeRange of ['short_term', 'medium_term', 'long_term']) {
-        const topTracks = await spotifyAPI.getTopTracks(timeRange, 50);
+        const topTracks = await api.getTopTracks(timeRange, 50);
         this.userData.topTracks[timeRange] = topTracks.items;
       }
 
       // Get top artists
       console.log('Fetching top artists...');
       for (const timeRange of ['short_term', 'medium_term', 'long_term']) {
-        const topArtists = await spotifyAPI.getTopArtists(timeRange, 50);
+        const topArtists = await api.getTopArtists(timeRange, 50);
         this.userData.topArtists[timeRange] = topArtists.items;
       }
 
       // Get recently played
       console.log('Fetching recently played tracks...');
-      const recentlyPlayed = await spotifyAPI.getRecentlyPlayed(50);
+      const recentlyPlayed = await api.getRecentlyPlayed(50);
       this.userData.recentlyPlayed = recentlyPlayed.items;
 
       // Get saved tracks
       console.log('Fetching saved tracks...');
       try {
-        const savedTracks = await spotifyAPI.getSavedTracks(50);
+        const savedTracks = await api.getSavedTracks(50);
         this.userData.savedTracks = savedTracks.items;
         console.log(`✅ Got ${this.userData.savedTracks.length} saved tracks`);
       } catch (error) {
@@ -101,7 +109,7 @@ class DataCollector {
         // Spotify API limits to 100 tracks per request
         for (let i = 0; i < trackIdArray.length; i += 100) {
           const batch = trackIdArray.slice(i, i + 100);
-          const audioFeatures = await spotifyAPI.getAudioFeatures(batch);
+          const audioFeatures = await api.getAudioFeatures(batch);
           
           audioFeatures.audio_features.forEach(feature => {
             if (feature) {
@@ -118,7 +126,7 @@ class DataCollector {
       console.log('Data collection complete!');
       
       // Save to local storage
-      await dataStorage.saveUserData(this.userData);
+      await dataStorage.saveUserData(userId, this.userData);
       
       return this.userData;
     } catch (error) {

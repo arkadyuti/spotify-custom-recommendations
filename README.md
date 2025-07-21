@@ -176,6 +176,48 @@ ngrok http 3005
 6. Add error handling and logging
 7. Create proper UI/UX instead of basic HTML links
 
+## TODO - Production Security
+
+### ⚠️ IMPORTANT: Session Secret Configuration
+**Current Status**: Using hardcoded SESSION_SECRET for beta testing
+**Production Requirement**: Must set SESSION_SECRET as environment variable
+
+#### What to do before production:
+1. **Generate a secure session secret**:
+   ```bash
+   # Method 1: Node.js
+   node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+   
+   # Method 2: OpenSSL
+   openssl rand -hex 64
+   ```
+
+2. **Set as environment variable**:
+   ```bash
+   # Production server
+   export SESSION_SECRET=your-generated-secret-here
+   
+   # Or in your .env file
+   echo "SESSION_SECRET=your-generated-secret-here" >> .env
+   ```
+
+3. **Update deployment configuration**:
+   - Add SESSION_SECRET to your hosting platform (Heroku, AWS, etc.)
+   - Add to Docker environment variables
+   - Add to CI/CD pipeline secrets
+
+#### Why this is critical:
+- **Security**: Prevents session hijacking and CSRF attacks
+- **OAuth**: Required for state parameter validation (prevents auth bypass)
+- **Session persistence**: Users stay logged in across server restarts
+- **Production compliance**: Required for any production authentication system
+
+#### Current beta implementation:
+- File: `src/index.js:22`
+- Build-time generated secret: `crypto.randomBytes(64).toString('hex')`
+- **Generates a new random secret on each server startup**
+- **For production: Set SESSION_SECRET environment variable to persist sessions across restarts**
+
 ---
 
 **Note**: This setup is optimized for local development and testing. Production deployment requires additional security and infrastructure considerations.

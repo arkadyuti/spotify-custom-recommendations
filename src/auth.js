@@ -1,75 +1,9 @@
 const express = require('express');
 const crypto = require('crypto');
-const storage = require('node-persist');
 require('dotenv').config();
+const dataStorage = require('./data-storage');
 
 const router = express.Router();
-let accessToken = null;
-let refreshToken = null;
-
-// Load tokens on startup
-async function loadTokens() {
-  if (tokensLoaded) return;
-  
-  try {
-    // Initialize storage first
-    await storage.init({
-      dir: './data/tokens',
-      stringify: JSON.stringify,
-      parse: JSON.parse,
-      encoding: 'utf8',
-      logging: false
-    });
-    
-    accessToken = await storage.getItem('accessToken');
-    refreshToken = await storage.getItem('refreshToken');
-    
-    if (accessToken) {
-      console.log('✅ Loaded saved authentication tokens');
-      
-      // Check if token is still valid by making a test request
-      const testResponse = await fetch('https://api.spotify.com/v1/me', {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      });
-      
-      if (testResponse.status === 401) {
-        console.log('🔄 Access token expired, attempting refresh...');
-        await refreshAccessToken();
-      } else {
-        console.log('✅ Tokens are valid and ready');
-      }
-    } else {
-      console.log('ℹ️ No saved tokens found');
-    }
-    tokensLoaded = true;
-  } catch (error) {
-    console.log('ℹ️ Error loading tokens:', error.message);
-    tokensLoaded = true;
-  }
-}
-
-// Save tokens to persistent storage
-async function saveTokens() {
-  try {
-    // Ensure storage is initialized
-    await storage.init({
-      dir: './data/tokens',
-      stringify: JSON.stringify,
-      parse: JSON.parse,
-      encoding: 'utf8',
-      logging: false
-    });
-    
-    await storage.setItem('accessToken', accessToken);
-    await storage.setItem('refreshToken', refreshToken);
-    console.log('💾 Tokens saved to persistent storage');
-  } catch (error) {
-    console.error('Error saving tokens:', error);
-  }
-}
-
-// Initialize tokens - will be called from main app
-let tokensLoaded = false;
 
 const scopes = [
   'user-read-private',
@@ -99,8 +33,20 @@ const generateRandomString = (length) => {
 router.get('/login', async (req, res) => {
   const state = generateRandomString(16);
   
-  // Store state for validation
-  req.app.locals.authState = state;
+  // Ensure session exists before storing state
+  if (!req.session) {
+    return res.status(500).send('Session not available. Please refresh and try again.');
+  }
+  
+  // Store state in session for validation
+  req.session.authState = state;
+  
+  console.log('Login initiated:', {
+    state,
+    sessionId: req.sessionID,
+    hasSession: !!req.session,
+    sessionSaved: !!req.session.authState
+  });
   
   const params = new URLSearchParams({
     response_type: 'code',
@@ -126,6 +72,26 @@ router.get('/callback', async (req, res) => {
   if (!code) {
     return res.status(400).send('No authorization code provided');
   }
+  
+  // Validate state parameter
+  console.log('State validation:', {
+    receivedState: state,
+    sessionState: req.session.authState,
+    sessionId: req.sessionID,
+    hasSession: !!req.session
+  });
+  
+  if (state !== req.session.authState) {
+    console.error('State mismatch detected:', {
+      received: state,
+      expected: req.session.authState,
+      sessionKeys: req.session ? Object.keys(req.session) : 'no session'
+    });
+    return res.status(400).send('State mismatch - possible CSRF attack');
+  }
+  
+  // Clear the state from session
+  delete req.session.authState;
 
   try {
     const authString = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64');
@@ -149,15 +115,34 @@ router.get('/callback', async (req, res) => {
       throw new Error(tokenData.error_description || tokenData.error);
     }
     
-    accessToken = tokenData.access_token;
-    refreshToken = tokenData.refresh_token;
+    // Store tokens in session
+    req.session.accessToken = tokenData.access_token;
+    req.session.refreshToken = tokenData.refresh_token;
+    req.session.tokenExpiry = Date.now() + (tokenData.expires_in * 1000);
     
-    // Save tokens to persistent storage
-    await saveTokens();
+    // Get user profile to store user ID
+    const profileResponse = await fetch('https://api.spotify.com/v1/me', {
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+    });
+    
+    if (profileResponse.ok) {
+      const profile = await profileResponse.json();
+      req.session.spotifyUserId = profile.id;
+      req.session.userDisplayName = profile.display_name;
+      console.log(`✅ User ${profile.display_name} (${profile.id}) authenticated successfully`);
+      
+      // Save tokens to MongoDB for persistence
+      await dataStorage.saveTokens(profile.id, {
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        tokenExpiry: req.session.tokenExpiry,
+        userDisplayName: profile.display_name
+      });
+    }
     
     res.send(`
       <h1>Authentication successful!</h1>
-      <p>Your authentication will persist across server restarts.</p>
+      <p>Welcome${req.session.userDisplayName ? `, ${req.session.userDisplayName}` : ''}!</p>
       <p>Redirecting to home page...</p>
       <script>
         setTimeout(() => {
@@ -171,67 +156,150 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-function getAccessToken() {
-  return accessToken;
+// Helper functions to get tokens from session
+function getAccessToken(req) {
+  return req.session?.accessToken || null;
 }
 
-function getRefreshToken() {
-  return refreshToken;
+function getRefreshToken(req) {
+  return req.session?.refreshToken || null;
 }
 
-async function refreshAccessToken() {
+function getUserId(req) {
+  return req.session?.spotifyUserId || null;
+}
+
+async function refreshAccessToken(req) {
+  const refreshToken = getRefreshToken(req);
+  
   if (!refreshToken) {
     throw new Error('No refresh token available');
   }
   
+  const authString = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64');
+  
   const response = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded'
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${authString}`
     },
     body: new URLSearchParams({
       grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: process.env.SPOTIFY_CLIENT_ID
+      refresh_token: refreshToken
     })
   });
   
   const data = await response.json();
   
   if (data.error) {
+    // If refresh fails, clear the session
+    req.session.destroy();
     throw new Error(data.error_description || data.error);
   }
   
-  accessToken = data.access_token;
+  // Update session with new tokens
+  req.session.accessToken = data.access_token;
   if (data.refresh_token) {
-    refreshToken = data.refresh_token;
+    req.session.refreshToken = data.refresh_token;
+  }
+  req.session.tokenExpiry = Date.now() + (data.expires_in * 1000);
+  
+  console.log('🔄 Tokens refreshed successfully for user:', req.session.spotifyUserId);
+  
+  // Update tokens in MongoDB
+  const userId = getUserId(req);
+  if (userId) {
+    await dataStorage.saveTokens(userId, {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token || refreshToken,
+      tokenExpiry: req.session.tokenExpiry,
+      userDisplayName: req.session.userDisplayName
+    });
   }
   
-  // Save refreshed tokens
-  await saveTokens();
+  return data.access_token;
+}
+
+// Check if token needs refresh
+async function ensureValidToken(req) {
+  if (!req.session?.accessToken) {
+    throw new Error('Not authenticated');
+  }
   
-  return accessToken;
+  // Check if token is expired or about to expire (5 minutes buffer)
+  if (req.session.tokenExpiry && Date.now() > req.session.tokenExpiry - 300000) {
+    console.log('🔄 Token expired or expiring soon, refreshing...');
+    await refreshAccessToken(req);
+  }
+  
+  return req.session.accessToken;
 }
 
 // Clear tokens (logout)
-async function clearTokens() {
+async function clearTokens(req, res) {
+  return new Promise((resolve, reject) => {
+    if (req.session) {
+      const userId = req.session.spotifyUserId;
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('Error destroying session:', err);
+          reject(err);
+        } else {
+          console.log('🔓 Session cleared for user:', userId);
+          // Clear the session cookie
+          if (res) {
+            res.clearCookie('spotify-rec-session');
+          }
+          resolve();
+        }
+      });
+    } else {
+      resolve();
+    }
+  });
+}
+
+// Load tokens from MongoDB to restore session (useful after server restart)
+async function loadTokens(userId, req) {
+  if (!userId || !req || !req.session) {
+    return null;
+  }
+  
   try {
-    // Ensure storage is initialized
-    await storage.init({
-      dir: './data/tokens',
-      stringify: JSON.stringify,
-      parse: JSON.parse,
-      encoding: 'utf8',
-      logging: false
-    });
+    const tokens = await dataStorage.loadTokens(userId);
     
-    accessToken = null;
-    refreshToken = null;
-    await storage.clear();
-    console.log('🔓 Tokens cleared');
+    if (tokens && tokens.refreshToken) {
+      // Check if tokens are still valid
+      if (tokens.tokenExpiry && Date.now() < tokens.tokenExpiry) {
+        // Restore session from MongoDB
+        req.session.accessToken = tokens.accessToken;
+        req.session.refreshToken = tokens.refreshToken;
+        req.session.tokenExpiry = tokens.tokenExpiry;
+        req.session.spotifyUserId = userId;
+        req.session.userDisplayName = tokens.userDisplayName;
+        
+        console.log('🔑 Session restored from MongoDB for user:', userId);
+        return tokens;
+      } else {
+        console.log('⏰ Stored tokens expired, needs re-authentication');
+      }
+    }
+    
+    return null;
   } catch (error) {
-    console.error('Error clearing tokens:', error);
+    console.error('Error loading tokens from MongoDB:', error);
+    return null;
   }
 }
 
-module.exports = { router, getAccessToken, getRefreshToken, refreshAccessToken, clearTokens, loadTokens };
+module.exports = { 
+  router, 
+  getAccessToken, 
+  getRefreshToken, 
+  getUserId,
+  refreshAccessToken, 
+  ensureValidToken,
+  clearTokens, 
+  loadTokens 
+};

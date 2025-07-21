@@ -2,15 +2,14 @@
 FROM node:18-alpine AS deps
 WORKDIR /app
 
-# Install corepack first for better layer caching
-RUN npm install -g corepack && corepack enable
+# Ensure we have a compatible Yarn version (Node 18 Alpine should have Yarn 1.x)
+RUN yarn --version
 
-# Copy package files and yarn config
-COPY package.json yarn.lock* .yarnrc.yml ./
-COPY .yarn ./.yarn
+# Copy package files and registry config
+COPY package.json yarn.lock* .npmrc .yarnrc ./
 
 # Install dependencies with optimizations
-RUN yarn install --frozen-lockfile --check-cache --network-timeout 300000
+RUN yarn install --frozen-lockfile --network-timeout 300000
 
 # Production stage
 FROM node:18-alpine AS runner
@@ -24,12 +23,15 @@ ENV HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 spotify
 
+# Ensure we have a compatible Yarn version (Node 18 Alpine should have Yarn 1.x)
+RUN yarn --version
+
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/.yarn ./.yarn
-COPY --from=deps /app/.yarnrc.yml ./
 COPY --from=deps /app/package.json ./
 COPY --from=deps /app/yarn.lock ./
+COPY --from=deps /app/.npmrc ./
+COPY --from=deps /app/.yarnrc ./
 
 # Copy source code
 COPY . .

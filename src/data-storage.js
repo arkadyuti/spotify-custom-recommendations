@@ -1,36 +1,43 @@
-const fs = require('fs-extra');
-const path = require('path');
+const { connectToDatabase } = require('./mongodb-client');
 
 class DataStorage {
   constructor() {
-    this.dataDir = './data';
-    this.userDataFile = path.join(this.dataDir, 'user-data.json');
-    this.analysisFile = path.join(this.dataDir, 'analysis.json');
-    this.tracksFile = path.join(this.dataDir, 'tracks.json');
-    
-    // Ensure data directory exists
-    this.initStorage();
+    this.db = null;
+    this.collections = {
+      userData: 'userData',
+      analysis: 'analysis', 
+      tracks: 'tracks',
+      tokens: 'tokens'
+    };
   }
 
-  async initStorage() {
-    try {
-      await fs.ensureDir(this.dataDir);
-    } catch (error) {
-      console.error('Error creating data directory:', error);
+  async getDb() {
+    if (!this.db) {
+      this.db = await connectToDatabase();
     }
+    return this.db;
   }
 
-  // Save user data to JSON file
-  async saveUserData(userData) {
+  // Save user data to MongoDB
+  async saveUserData(userId, userData) {
     try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.userData);
+      
       const dataToSave = {
+        userId,
         ...userData,
-        lastUpdated: new Date().toISOString(),
+        lastUpdated: new Date(),
         audioFeatures: userData.audioFeatures ? Object.fromEntries(userData.audioFeatures) : {}
       };
       
-      await fs.writeJson(this.userDataFile, dataToSave, { spaces: 2 });
-      console.log('💾 User data saved to local storage');
+      await collection.replaceOne(
+        { userId },
+        dataToSave,
+        { upsert: true }
+      );
+      
+      console.log(`💾 User data saved for user: ${userId}`);
       return true;
     } catch (error) {
       console.error('Error saving user data:', error);
@@ -38,16 +45,22 @@ class DataStorage {
     }
   }
 
-  // Load user data from JSON file
-  async loadUserData() {
+  // Load user data from MongoDB
+  async loadUserData(userId) {
     try {
-      if (await fs.pathExists(this.userDataFile)) {
-        const data = await fs.readJson(this.userDataFile);
-        
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.userData);
+      
+      const data = await collection.findOne({ userId });
+      
+      if (data) {
         // Convert audioFeatures back to Map
         if (data.audioFeatures && typeof data.audioFeatures === 'object') {
           data.audioFeatures = new Map(Object.entries(data.audioFeatures));
         }
+        
+        // Remove MongoDB _id from returned data
+        delete data._id;
         
         return data;
       }
@@ -59,15 +72,24 @@ class DataStorage {
   }
 
   // Save analysis data
-  async saveAnalysis(analysis) {
+  async saveAnalysis(userId, analysis) {
     try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.analysis);
+      
       const analysisToSave = {
+        userId,
         ...analysis,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date()
       };
       
-      await fs.writeJson(this.analysisFile, analysisToSave, { spaces: 2 });
-      console.log('💾 Analysis saved to local storage');
+      await collection.replaceOne(
+        { userId },
+        analysisToSave,
+        { upsert: true }
+      );
+      
+      console.log(`💾 Analysis saved for user: ${userId}`);
       return true;
     } catch (error) {
       console.error('Error saving analysis:', error);
@@ -76,10 +98,16 @@ class DataStorage {
   }
 
   // Load analysis data
-  async loadAnalysis() {
+  async loadAnalysis(userId) {
     try {
-      if (await fs.pathExists(this.analysisFile)) {
-        return await fs.readJson(this.analysisFile);
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.analysis);
+      
+      const data = await collection.findOne({ userId });
+      
+      if (data) {
+        delete data._id;
+        return data;
       }
       return null;
     } catch (error) {
@@ -89,15 +117,24 @@ class DataStorage {
   }
 
   // Save tracks data
-  async saveTracks(tracksData) {
+  async saveTracks(userId, tracksData) {
     try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.tracks);
+      
       const tracksToSave = {
+        userId,
         ...tracksData,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date()
       };
       
-      await fs.writeJson(this.tracksFile, tracksToSave, { spaces: 2 });
-      console.log('💾 Tracks data saved to local storage');
+      await collection.replaceOne(
+        { userId },
+        tracksToSave,
+        { upsert: true }
+      );
+      
+      console.log(`💾 Tracks data saved for user: ${userId}`);
       return true;
     } catch (error) {
       console.error('Error saving tracks:', error);
@@ -106,10 +143,16 @@ class DataStorage {
   }
 
   // Load tracks data
-  async loadTracks() {
+  async loadTracks(userId) {
     try {
-      if (await fs.pathExists(this.tracksFile)) {
-        return await fs.readJson(this.tracksFile);
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.tracks);
+      
+      const data = await collection.findOne({ userId });
+      
+      if (data) {
+        delete data._id;
+        return data;
       }
       return null;
     } catch (error) {
@@ -118,16 +161,29 @@ class DataStorage {
     }
   }
 
-  // Check if we have saved data
-  async hasUserData() {
-    return await fs.pathExists(this.userDataFile);
+  // Check if we have saved data for a user
+  async hasUserData(userId) {
+    try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.userData);
+      
+      const count = await collection.countDocuments({ userId });
+      return count > 0;
+    } catch (error) {
+      console.error('Error checking user data:', error);
+      return false;
+    }
   }
 
   // Get data summary for homepage
-  async getDataSummary() {
+  async getDataSummary(userId) {
     try {
-      const userData = await this.loadUserData();
-      const analysis = await this.loadAnalysis();
+      if (!userId) {
+        return null;
+      }
+
+      const userData = await this.loadUserData(userId);
+      const analysis = await this.loadAnalysis(userId);
       
       if (!userData) {
         return null;
@@ -161,23 +217,105 @@ class DataStorage {
     }
   }
 
-  // Clear all saved data
-  async clearAllData() {
+  // Clear all saved data for a user
+  async clearUserData(userId) {
     try {
-      const files = [this.userDataFile, this.analysisFile, this.tracksFile];
+      const db = await this.getDb();
       
-      for (const file of files) {
-        if (await fs.pathExists(file)) {
-          await fs.remove(file);
-        }
-      }
+      // Delete from all collections
+      await Promise.all([
+        db.collection(this.collections.userData).deleteMany({ userId }),
+        db.collection(this.collections.analysis).deleteMany({ userId }),
+        db.collection(this.collections.tracks).deleteMany({ userId })
+      ]);
       
-      console.log('🗑️ All saved data cleared');
+      console.log(`🗑️ All saved data cleared for user: ${userId}`);
       return true;
     } catch (error) {
-      console.error('Error clearing data:', error);
+      console.error('Error clearing user data:', error);
       return false;
     }
+  }
+
+  // Get all user IDs with saved data
+  async getAllUserIds() {
+    try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.userData);
+      
+      const users = await collection.distinct('userId');
+      return users;
+    } catch (error) {
+      console.error('Error getting user IDs:', error);
+      return [];
+    }
+  }
+
+  // Token storage methods (for auth.js)
+  async saveTokens(userId, tokens) {
+    try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.tokens);
+      
+      await collection.replaceOne(
+        { userId },
+        { 
+          userId,
+          ...tokens,
+          lastUpdated: new Date()
+        },
+        { upsert: true }
+      );
+      
+      return true;
+    } catch (error) {
+      console.error('Error saving tokens:', error);
+      return false;
+    }
+  }
+
+  async loadTokens(userId) {
+    try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.tokens);
+      
+      const data = await collection.findOne({ userId });
+      
+      if (data) {
+        delete data._id;
+        return data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error loading tokens:', error);
+      return null;
+    }
+  }
+
+  // Legacy methods for backward compatibility
+  async clearAllData() {
+    console.warn('clearAllData() is deprecated. Use clearUserData(userId) instead.');
+    return false;
+  }
+
+  // For backwards compatibility with file-based paths
+  getUserDir(userId) {
+    // Return a dummy path since we're using MongoDB now
+    return `/data/users/${userId}`;
+  }
+
+  async getUserFilePaths(userId) {
+    // Return dummy paths for backward compatibility
+    return {
+      userDataFile: `/data/users/${userId}/user-data.json`,
+      analysisFile: `/data/users/${userId}/analysis.json`,
+      tracksFile: `/data/users/${userId}/tracks.json`
+    };
+  }
+
+  async initStorage() {
+    // No need to create directories with MongoDB
+    console.log('MongoDB storage initialized');
   }
 }
 

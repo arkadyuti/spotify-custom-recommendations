@@ -1,28 +1,64 @@
 const express = require('express');
-const { router: authRouter, getAccessToken, clearTokens, loadTokens } = require('./auth');
+const session = require('express-session');
+const crypto = require('crypto');
+const { router: authRouter, getAccessToken, getUserId, clearTokens, loadTokens } = require('./auth');
 const dataCollector = require('./data-collector');
 const spotifyAPI = require('./spotify-api');
 const recommendationEngine = require('./recommendation-engine');
 const customRecommender = require('./custom-recommender');
 const dataStorage = require('./data-storage');
 const { generateRecommendationsPage } = require('./recommendations-page');
+const { connectToDatabase } = require('./mongodb-client');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3005;
 
+// Validate critical environment variables
+if (!process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET environment variable is required. Please add it to your .env file.');
+}
+
+// Use SESSION_SECRET from environment
+const SESSION_SECRET = process.env.SESSION_SECRET;
+
+// Log session secret info for debugging
+console.log('Session configuration:', {
+  hasEnvSecret: !!process.env.SESSION_SECRET,
+  secretLength: SESSION_SECRET.length,
+  nodeEnv: process.env.NODE_ENV
+});
+
+app.use(session({
+  secret: SESSION_SECRET,
+  name: 'spotify-rec-session', // Custom session name
+  resave: false,
+  saveUninitialized: false, // Don't create session until something is stored
+  rolling: true, // Reset expiry on each request
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    httpOnly: true, // Prevent XSS
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // 'none' for production OAuth, 'lax' for dev
+  }
+}));
+
 app.use(express.json());
 app.use('/auth', authRouter);
 
 app.get('/', async (req, res) => {
-  // Ensure tokens are loaded before checking auth status
-  await loadTokens();
-  
-  const isAuthenticated = !!getAccessToken();
-  console.log('Authentication check:', { isAuthenticated, hasToken: !!getAccessToken() });
+  const isAuthenticated = !!getAccessToken(req);
+  const userId = getUserId(req);
+  console.log('Authentication check:', { 
+    isAuthenticated, 
+    userId, 
+    sessionId: req.sessionID,
+    hasSession: !!req.session,
+    sessionData: req.session ? Object.keys(req.session) : 'no session'
+  });
   
   // Get data summary for sidebar
-  const dataSummary = isAuthenticated ? await dataStorage.getDataSummary() : null;
+  const dataSummary = isAuthenticated ? await dataStorage.getDataSummary(userId) : null;
   
   res.send(`
     <!DOCTYPE html>
@@ -96,7 +132,7 @@ app.get('/', async (req, res) => {
             </div>
             
             <h3>Quick Actions</h3>
-            <a href="/collect-data" class="action-btn">🔄 Sync My Data</a>
+            <a href="/collect-data?refresh=true" class="action-btn">🔄 Sync My Data</a>
             <a href="/recommendations" class="action-btn">🎯 Get Recommendations</a>
             <br><br>
             
@@ -187,7 +223,8 @@ app.get('/', async (req, res) => {
 
 app.get('/test-auth', async (req, res) => {
   try {
-    const profile = await spotifyAPI.getMe();
+    const api = spotifyAPI.create(req);
+    const profile = await api.getMe();
     res.json({
       message: 'Authentication working!',
       profile: {
@@ -204,12 +241,17 @@ app.get('/test-auth', async (req, res) => {
 
 app.get('/collect-data', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).send('Not authenticated');
+    }
+
     const forceRefresh = req.query.refresh === 'true';
-    const data = await dataCollector.collectUserData(forceRefresh);
+    const data = await dataCollector.collectUserData(req, forceRefresh);
     
     // Also save analysis data
     const analysis = dataCollector.analyzeListeningPatterns();
-    await dataStorage.saveAnalysis(analysis);
+    await dataStorage.saveAnalysis(userId, analysis);
     
     // Prepare tracks data for storage
     const tracksData = {
@@ -247,7 +289,7 @@ app.get('/collect-data', async (req, res) => {
       })) || []
     };
     
-    await dataStorage.saveTracks(tracksData);
+    await dataStorage.saveTracks(userId, tracksData);
     
     // Redirect back to homepage to show updated data
     res.send(`
@@ -279,7 +321,7 @@ app.get('/collect-data', async (req, res) => {
             <p><strong>Saved Tracks:</strong> ${data.savedTracks.length}</p>
             <p><strong>Audio Features:</strong> ${data.audioFeatures ? data.audioFeatures.size || Object.keys(data.audioFeatures).length : 0}</p>
             
-            <p>Your data has been saved locally and will be displayed on the homepage.</p>
+            <p>Your data has been saved and will be displayed on the homepage.</p>
           </div>
           
           <a href="/" class="action-btn">🏠 Return to Homepage</a>
@@ -309,7 +351,8 @@ app.get('/collect-data', async (req, res) => {
 
 app.get('/analysis', async (req, res) => {
   try {
-    const analysis = await dataStorage.loadAnalysis();
+    const userId = getUserId(req);
+    const analysis = await dataStorage.loadAnalysis(userId);
     if (!analysis) {
       return res.send(`
         <html>
@@ -338,7 +381,8 @@ app.get('/analysis', async (req, res) => {
 
 app.get('/my-tracks', async (req, res) => {
   try {
-    const tracksData = await dataStorage.loadTracks();
+    const userId = getUserId(req);
+    const tracksData = await dataStorage.loadTracks(userId);
     if (!tracksData) {
       return res.send(`
         <html>
@@ -368,8 +412,24 @@ app.get('/my-tracks', async (req, res) => {
 });
 
 app.get('/recommendations', async (req, res) => {
-  const pageContent = await generateRecommendationsPage(req, res);
-  res.send(pageContent);
+  try {
+    const pageContent = await generateRecommendationsPage(req, res);
+    if (pageContent) {
+      res.send(pageContent);
+    }
+    // If pageContent is null/undefined, it means the function already sent a response
+  } catch (error) {
+    console.error('Error in recommendations route:', error);
+    res.status(500).send(`
+      <html>
+        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+          <h2>❌ Error loading recommendations</h2>
+          <p>${error.message}</p>
+          <a href="/" style="background: #1db954; color: white; text-decoration: none; padding: 12px 24px; border-radius: 25px;">Return to Homepage</a>
+        </body>
+      </html>
+    `);
+  }
 });
 
 // API endpoint for recommendations (called by the frontend)
@@ -382,7 +442,7 @@ app.post('/api/recommendations', async (req, res) => {
     }
     
     // Use independent recommendations (no user account data)
-    const recommendations = await customRecommender.getIndependentRecommendations(inputTracks, limit || 20);
+    const recommendations = await customRecommender.getIndependentRecommendations(req, inputTracks, limit || 20);
     res.json(recommendations);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -398,18 +458,16 @@ app.post('/api/create-playlist', async (req, res) => {
       return res.status(400).json({ error: 'Playlist name and tracks are required' });
     }
 
+    const api = spotifyAPI.create(req);
+    
     // Get user profile to create playlist
-    const profile = await spotifyAPI.getMe();
+    const profile = await api.getMe();
     
     // Create playlist
-    const playlistResponse = await spotifyAPI.makeRequest('/me/playlists', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: name,
-        description: `Custom recommendations generated by AI • Created ${new Date().toLocaleDateString()}`,
-        public: false
-      })
-    });
+    const playlistResponse = await api.createPlaylist(profile.id, name, 
+      `Custom recommendations generated by AI • Created ${new Date().toLocaleDateString()}`, 
+      false
+    );
 
     console.log('Playlist created:', playlistResponse.name, playlistResponse.id);
 
@@ -421,7 +479,7 @@ app.post('/api/create-playlist', async (req, res) => {
       try {
         // Search for the track
         const searchQuery = `track:"${track.name}" artist:"${track.artist}"`;
-        const searchResults = await spotifyAPI.searchTracks(searchQuery, 1);
+        const searchResults = await api.searchTracks(searchQuery, 1);
         
         if (searchResults.tracks.items.length > 0) {
           trackUris.push(searchResults.tracks.items[0].uri);
@@ -436,19 +494,9 @@ app.post('/api/create-playlist', async (req, res) => {
 
     console.log(`Found ${trackUris.length} tracks to add to playlist`);
 
-    // Add tracks to playlist in batches
+    // Add tracks to playlist
     if (trackUris.length > 0) {
-      const batchSize = 100; // Spotify limit per request
-      for (let i = 0; i < trackUris.length; i += batchSize) {
-        const batch = trackUris.slice(i, i + batchSize);
-        
-        await spotifyAPI.makeRequest(`/playlists/${playlistResponse.id}/tracks`, {
-          method: 'POST',
-          body: JSON.stringify({
-            uris: batch
-          })
-        });
-      }
+      await api.addTracksToPlaylist(playlistResponse.id, trackUris);
     }
 
     res.json({
@@ -486,10 +534,11 @@ app.post('/api/update-playlist', async (req, res) => {
       return res.status(400).json({ error: 'Invalid Spotify playlist URL format' });
     }
 
+    const api = spotifyAPI.create(req);
     console.log('Updating playlist:', playlistId);
 
     // Get playlist info to verify access
-    const playlistInfo = await spotifyAPI.makeRequest(`/playlists/${playlistId}`);
+    const playlistInfo = await api.makeRequest(`/playlists/${playlistId}`);
     console.log('Found playlist:', playlistInfo.name);
 
     // Search for tracks and collect URIs
@@ -500,7 +549,7 @@ app.post('/api/update-playlist', async (req, res) => {
       try {
         // Search for the track
         const searchQuery = `track:"${track.name}" artist:"${track.artist}"`;
-        const searchResults = await spotifyAPI.searchTracks(searchQuery, 1);
+        const searchResults = await api.searchTracks(searchQuery, 1);
         
         if (searchResults.tracks.items.length > 0) {
           trackUris.push(searchResults.tracks.items[0].uri);
@@ -522,7 +571,7 @@ app.post('/api/update-playlist', async (req, res) => {
       const firstBatch = trackUris.slice(0, batchSize);
       
       // Use PUT to replace all tracks with the first batch
-      await spotifyAPI.makeRequest(`/playlists/${playlistId}/tracks`, {
+      await api.makeRequest(`/playlists/${playlistId}/tracks`, {
         method: 'PUT',
         body: JSON.stringify({
           uris: firstBatch
@@ -534,7 +583,7 @@ app.post('/api/update-playlist', async (req, res) => {
         for (let i = batchSize; i < trackUris.length; i += batchSize) {
           const batch = trackUris.slice(i, i + batchSize);
           
-          await spotifyAPI.makeRequest(`/playlists/${playlistId}/tracks`, {
+          await api.makeRequest(`/playlists/${playlistId}/tracks`, {
             method: 'POST',
             body: JSON.stringify({
               uris: batch
@@ -544,7 +593,7 @@ app.post('/api/update-playlist', async (req, res) => {
       }
     } else {
       // If no tracks found, clear the playlist
-      await spotifyAPI.makeRequest(`/playlists/${playlistId}/tracks`, {
+      await api.makeRequest(`/playlists/${playlistId}/tracks`, {
         method: 'PUT',
         body: JSON.stringify({
           uris: []
@@ -567,24 +616,77 @@ app.post('/api/update-playlist', async (req, res) => {
 });
 
 app.get('/logout', async (req, res) => {
-  await clearTokens();
-  res.send(`
-    <h1>Logged out successfully!</h1>
-    <p><a href="/">Go back to home</a></p>
-  `);
+  try {
+    await clearTokens(req, res);
+    res.send(`
+      <html>
+        <head>
+          <title>Logged Out</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f8f9fa; }
+            .success { background: #d4edda; color: #155724; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 500px; }
+            .action-btn { 
+              display: inline-block; 
+              background: #1db954; 
+              color: white; 
+              text-decoration: none; 
+              padding: 12px 24px; 
+              margin: 10px; 
+              border-radius: 25px; 
+              font-weight: bold;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="success">
+            <h1>🔓 Logged out successfully!</h1>
+            <p>Your session has been cleared.</p>
+            <a href="/" class="action-btn">🏠 Go back to home</a>
+          </div>
+          <script>
+            // Auto redirect after 3 seconds
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 3000);
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error during logout:', error);
+    res.status(500).send(`
+      <html>
+        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+          <h2>❌ Error during logout</h2>
+          <p>${error.message}</p>
+          <a href="/" style="background: #1db954; color: white; text-decoration: none; padding: 12px 24px; border-radius: 25px;">Return to Homepage</a>
+        </body>
+      </html>
+    `);
+  }
 });
 
 async function startServer() {
-  // Load saved tokens before starting server
-  await loadTokens();
+  // Test MongoDB connection
+  try {
+    if (!process.env.MONGODB_URI) {
+      console.error('⚠️  MONGODB_URI not found in .env file');
+    } else {
+      const db = await connectToDatabase();
+      console.log('✅ MongoDB connected successfully!');
+    }
+  } catch (error) {
+    console.error('⚠️  MongoDB connection failed:', error.message);
+  }
   
+  // Start server regardless of MongoDB status
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`\nTo get started:`);
     console.log(`1. Create a Spotify app at https://developer.spotify.com/dashboard`);
     console.log(`2. Copy .env.example to .env and add your credentials`);
-    console.log(`3. Add redirect URI in Spotify app: https://e8e4-121-242-143-146.ngrok-free.app/auth/callback`);
-    console.log(`4. Visit https://e8e4-121-242-143-146.ngrok-free.app and login with Spotify`);
+    console.log(`3. Add redirect URI in Spotify app: ${process.env.REDIRECT_URI || 'your-ngrok-url/auth/callback'}`);
+    console.log(`4. Visit the server URL and login with Spotify`);
   });
 }
 

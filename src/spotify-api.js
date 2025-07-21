@@ -1,17 +1,16 @@
-const { getAccessToken, refreshAccessToken } = require('./auth');
+const { getAccessToken, refreshAccessToken, ensureValidToken } = require('./auth');
 
 class SpotifyAPI {
-  constructor() {
+  constructor(req) {
     this.baseURL = 'https://api.spotify.com/v1';
+    this.req = req;
   }
 
   async makeRequest(endpoint, options = {}) {
-    const token = getAccessToken();
-    if (!token) {
-      throw new Error('Not authenticated. Please login first.');
-    }
-
     try {
+      // Ensure we have a valid token
+      const token = await ensureValidToken(this.req);
+      
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
         headers: {
@@ -23,8 +22,26 @@ class SpotifyAPI {
 
       if (response.status === 401) {
         // Token expired, try to refresh
-        await refreshAccessToken();
-        return this.makeRequest(endpoint, options);
+        await refreshAccessToken(this.req);
+        const newToken = getAccessToken(this.req);
+        
+        // Retry the request with new token
+        const retryResponse = await fetch(`${this.baseURL}${endpoint}`, {
+          ...options,
+          headers: {
+            'Authorization': `Bearer ${newToken}`,
+            'Content-Type': 'application/json',
+            ...options.headers
+          }
+        });
+        
+        if (!retryResponse.ok) {
+          const errorBody = await retryResponse.text();
+          console.error(`Spotify API error: ${retryResponse.status} ${retryResponse.statusText}`, errorBody);
+          throw new Error(`Spotify API error: ${retryResponse.status} ${retryResponse.statusText} - ${errorBody}`);
+        }
+        
+        return await retryResponse.json();
       }
 
       if (!response.ok) {
@@ -104,16 +121,73 @@ class SpotifyAPI {
     });
   }
 
-  async pause() {
-    return this.makeRequest('/me/player/pause', { method: 'PUT' });
+  async pause(deviceId = null) {
+    const query = deviceId ? `?device_id=${deviceId}` : '';
+    return this.makeRequest(`/me/player/pause${query}`, {
+      method: 'PUT'
+    });
   }
 
-  async next() {
-    return this.makeRequest('/me/player/next', { method: 'POST' });
+  async next(deviceId = null) {
+    const query = deviceId ? `?device_id=${deviceId}` : '';
+    return this.makeRequest(`/me/player/next${query}`, {
+      method: 'POST'
+    });
   }
 
-  async previous() {
-    return this.makeRequest('/me/player/previous', { method: 'POST' });
+  async previous(deviceId = null) {
+    const query = deviceId ? `?device_id=${deviceId}` : '';
+    return this.makeRequest(`/me/player/previous${query}`, {
+      method: 'POST'
+    });
+  }
+
+  // Create a playlist
+  async createPlaylist(userId, name, description = '', isPublic = false) {
+    return this.makeRequest(`/users/${userId}/playlists`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        description,
+        public: isPublic
+      })
+    });
+  }
+
+  // Add tracks to playlist
+  async addTracksToPlaylist(playlistId, trackUris) {
+    return this.makeRequest(`/playlists/${playlistId}/tracks`, {
+      method: 'POST',
+      body: JSON.stringify({
+        uris: trackUris
+      })
+    });
+  }
+
+  // Get track details
+  async getTrack(trackId) {
+    return this.makeRequest(`/tracks/${trackId}`);
+  }
+
+  // Get multiple tracks
+  async getTracks(trackIds) {
+    const ids = Array.isArray(trackIds) ? trackIds.join(',') : trackIds;
+    return this.makeRequest(`/tracks?ids=${ids}`);
+  }
+
+  // Get artist details
+  async getArtist(artistId) {
+    return this.makeRequest(`/artists/${artistId}`);
+  }
+
+  // Get artist's top tracks
+  async getArtistTopTracks(artistId, market = 'US') {
+    return this.makeRequest(`/artists/${artistId}/top-tracks?market=${market}`);
+  }
+
+  // Get related artists
+  async getRelatedArtists(artistId) {
+    return this.makeRequest(`/artists/${artistId}/related-artists`);
   }
 
   // Get available devices
@@ -125,6 +199,14 @@ class SpotifyAPI {
   async getCurrentPlayback() {
     return this.makeRequest('/me/player');
   }
+
+  // Get currently playing track
+  async getCurrentlyPlaying() {
+    return this.makeRequest('/me/player/currently-playing');
+  }
 }
 
-module.exports = new SpotifyAPI();
+// Export a factory function instead of a singleton
+module.exports = {
+  create: (req) => new SpotifyAPI(req)
+};

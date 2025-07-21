@@ -8,7 +8,7 @@ class CustomRecommender {
   }
 
   // Independent recommendation function - ONLY uses input tracks, no user data
-  async getIndependentRecommendations(inputSongs = [], limit = 20) {
+  async getIndependentRecommendations(req, inputSongs = [], limit = 20) {
     try {
       console.log('🎵 Starting independent recommendation engine (input tracks only)...');
       console.log('Input tracks received:', inputSongs.length, inputSongs.map(t => `${t.name} by ${t.artists?.map(a => a.name).join(', ')}`));
@@ -22,7 +22,7 @@ class CustomRecommender {
       console.log(`Selected ${seedTracks.length} seed tracks for independent recommendations`);
 
       // Generate recommendations using track-only strategies (no user data)
-      const recommendations = await this.generateIndependentRecommendations(seedTracks, limit * 3);
+      const recommendations = await this.generateIndependentRecommendations(req, seedTracks, limit * 3);
       console.log(`Found ${recommendations.length} total candidates from search strategies`);
       
       // Filter and rank the results
@@ -47,7 +47,7 @@ class CustomRecommender {
   }
 
   // Main recommendation function (original - with user data)
-  async getCustomRecommendations(inputSongs = [], limit = 20) {
+  async getCustomRecommendations(req, inputSongs = [], limit = 20) {
     try {
       console.log('🎵 Starting custom recommendation engine...');
       
@@ -66,7 +66,7 @@ class CustomRecommender {
       console.log(`Selected ${seedTracks.length} seed tracks`);
 
       // Generate recommendations using multiple strategies
-      const recommendations = await this.generateRecommendations(seedTracks, limit * 3);
+      const recommendations = await this.generateRecommendations(req, seedTracks, limit * 3);
       
       // Filter and rank the results
       const filteredRecs = this.filterAndRank(recommendations, inputSongs, limit);
@@ -136,23 +136,23 @@ class CustomRecommender {
   }
 
   // Generate recommendations using multiple strategies
-  async generateRecommendations(seedTracks, limit) {
+  async generateRecommendations(req, seedTracks, limit) {
     const allRecommendations = [];
     
     try {
       // Strategy 1: Search for songs by the same artists
       console.log('🔍 Strategy 1: Finding tracks by same artists...');
-      const artistRecs = await this.getRecommendationsByArtists(seedTracks, Math.floor(limit * 0.4));
+      const artistRecs = await this.getRecommendationsByArtists(req, seedTracks, Math.floor(limit * 0.4));
       allRecommendations.push(...artistRecs);
 
       // Strategy 2: Search for similar genres/styles
       console.log('🔍 Strategy 2: Finding tracks by genre similarity...');
-      const genreRecs = await this.getRecommendationsByGenres(seedTracks, Math.floor(limit * 0.3));
+      const genreRecs = await this.getRecommendationsByGenres(req, seedTracks, Math.floor(limit * 0.3));
       allRecommendations.push(...genreRecs);
 
       // Strategy 3: Search using track/artist names + related terms
       console.log('🔍 Strategy 3: Finding tracks by keyword similarity...');
-      const keywordRecs = await this.getRecommendationsByKeywords(seedTracks, Math.floor(limit * 0.3));
+      const keywordRecs = await this.getRecommendationsByKeywords(req, seedTracks, Math.floor(limit * 0.3));
       allRecommendations.push(...keywordRecs);
 
     } catch (error) {
@@ -163,19 +163,19 @@ class CustomRecommender {
   }
 
   // Generate recommendations independently - only using input track data, no user preferences
-  async generateIndependentRecommendations(seedTracks, limit) {
+  async generateIndependentRecommendations(req, seedTracks, limit) {
     const allRecommendations = [];
     
     try {
       // Strategy 1: Search for songs by the same artists (no user genre preferences)
       console.log('🔍 Independent Strategy 1: Finding tracks by same artists...');
-      const artistRecs = await this.getRecommendationsByArtists(seedTracks, Math.floor(limit * 0.5));
+      const artistRecs = await this.getRecommendationsByArtists(req, seedTracks, Math.floor(limit * 0.5));
       console.log(`Strategy 1 found ${artistRecs.length} tracks`);
       allRecommendations.push(...artistRecs);
 
       // Strategy 2: Search using track/artist names + related terms (no user data)
       console.log('🔍 Independent Strategy 2: Finding tracks by keyword similarity...');
-      const keywordRecs = await this.getRecommendationsByKeywords(seedTracks, Math.floor(limit * 0.5));
+      const keywordRecs = await this.getRecommendationsByKeywords(req, seedTracks, Math.floor(limit * 0.5));
       console.log(`Strategy 2 found ${keywordRecs.length} tracks`);
       allRecommendations.push(...keywordRecs);
 
@@ -189,7 +189,8 @@ class CustomRecommender {
   }
 
   // Strategy 1: Find tracks by same artists (but different from input)
-  async getRecommendationsByArtists(seedTracks, limit) {
+  async getRecommendationsByArtists(req, seedTracks, limit) {
+    const api = spotifyAPI.create(req);
     const recommendations = [];
     const artistIds = new Set();
 
@@ -210,7 +211,7 @@ class CustomRecommender {
         if (!artist) continue;
 
         const searchQuery = `artist:${artist.name}`;
-        const searchResults = await spotifyAPI.searchTracks(searchQuery, 10);
+        const searchResults = await api.searchTracks(searchQuery, 10);
         
         if (searchResults.tracks?.items) {
           recommendations.push(...searchResults.tracks.items);
@@ -227,7 +228,8 @@ class CustomRecommender {
   }
 
   // Strategy 2: Find tracks by genre/style
-  async getRecommendationsByGenres(seedTracks, limit) {
+  async getRecommendationsByGenres(req, seedTracks, limit) {
+    const api = spotifyAPI.create(req);
     const recommendations = [];
     
     // Extract genres from user's listening patterns
@@ -238,7 +240,7 @@ class CustomRecommender {
       try {
         // Search for tracks in this genre
         const searchQuery = `genre:${genre}`;
-        const searchResults = await spotifyAPI.searchTracks(searchQuery, 8);
+        const searchResults = await api.searchTracks(searchQuery, 8);
         
         if (searchResults.tracks?.items) {
           recommendations.push(...searchResults.tracks.items);
@@ -249,7 +251,7 @@ class CustomRecommender {
         // If genre search fails, try broader terms
         try {
           const broadQuery = genre.split(' ')[0]; // Use first word of genre
-          const searchResults = await spotifyAPI.searchTracks(broadQuery, 5);
+          const searchResults = await api.searchTracks(broadQuery, 5);
           if (searchResults.tracks?.items) {
             recommendations.push(...searchResults.tracks.items);
           }
@@ -263,7 +265,8 @@ class CustomRecommender {
   }
 
   // Strategy 3: Find tracks using keyword similarity
-  async getRecommendationsByKeywords(seedTracks, limit) {
+  async getRecommendationsByKeywords(req, seedTracks, limit) {
+    const api = spotifyAPI.create(req);
     const recommendations = [];
     
     // Extract keywords from track and artist names
@@ -284,7 +287,7 @@ class CustomRecommender {
     // Search using top keywords
     for (const keyword of Array.from(keywords).slice(0, 5)) {
       try {
-        const searchResults = await spotifyAPI.searchTracks(keyword, 6);
+        const searchResults = await api.searchTracks(keyword, 6);
         
         if (searchResults.tracks?.items) {
           recommendations.push(...searchResults.tracks.items);

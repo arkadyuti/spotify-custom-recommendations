@@ -6,7 +6,7 @@ services:
     ports:
       - "3005:3005"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=3005
       - HOSTNAME=0.0.0.0
       - LOG_LEVEL=debug
