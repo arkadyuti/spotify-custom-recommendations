@@ -99,7 +99,7 @@ async function generateRecommendationsPage(req, res) {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Get Recommendations - Spotify Engine</title>
+        <title>Get Recommendations - Spotify RecoEngine</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
           .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }

@@ -64,7 +64,7 @@ app.get('/', async (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Spotify Recommendation Engine</title>
+      <title>Spotify RecoEngine</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
         .container { display: flex; gap: 20px; max-width: 1200px; margin: 0 auto; }

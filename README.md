@@ -1,6 +1,6 @@
-# Spotify Recommendation Engine - Setup Guide
+# Spotify RecoEngine - Setup Guide
 
-This document outlines all the setup requirements and assumptions for running the Spotify Recommendation Engine locally.
+This document outlines all the setup requirements and assumptions for running Spotify RecoEngine locally.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ This document outlines all the setup requirements and assumptions for running th
 1. Go to https://developer.spotify.com/dashboard
 2. Click "Create App"
 3. Fill in app details:
-    - App name: "Custom Recommendation Engine"
+    - App name: "Spotify RecoEngine"
     - App description: "Personal music recommendation system"
     - Website: `https://your-ngrok-url.ngrok.io`
     - Redirect URI: `https://your-ngrok-url.ngrok.io/auth/callback`
