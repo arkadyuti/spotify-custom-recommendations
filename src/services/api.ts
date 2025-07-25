@@ -121,6 +121,17 @@ export interface DataSummary {
   }>;
 }
 
+export interface UserPlaylist {
+  id: string;
+  name: string;
+  description: string;
+  tracks_total: number;
+  owner: string;
+  is_owner: boolean;
+  external_url: string;
+  image?: string;
+}
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -214,6 +225,16 @@ class ApiService {
     return response.data;
   }
 
+  async searchTracks(query: string, limit: number = 20): Promise<{
+    query: string;
+    total: number;
+    limit: number;
+    tracks: Track[];
+  }> {
+    const response = await this.api.get(`/api/search-tracks?q=${encodeURIComponent(query)}&limit=${limit}`);
+    return response.data;
+  }
+
   // Recommendation methods
   async getRecommendations(request: RecommendationRequest): Promise<RecommendationResponse> {
     const response = await this.api.post('/api/recommendations', request);
@@ -231,11 +252,19 @@ class ApiService {
     return response.data;
   }
 
-  async updatePlaylist(playlistUrl: string, tracks: FormattedTrack[]): Promise<PlaylistResponse> {
+  async updatePlaylist(playlistId: string, tracks: FormattedTrack[]): Promise<PlaylistResponse> {
     const response = await this.api.post('/api/update-playlist', {
-      playlistUrl,
+      playlistId,
       tracks
     });
+    return response.data;
+  }
+
+  async getUserPlaylists(): Promise<{
+    playlists: UserPlaylist[];
+    total: number;
+  }> {
+    const response = await this.api.get('/api/user-playlists');
     return response.data;
   }
 

@@ -8,10 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Header } from "@/components/layout/Header"
 import { UserProfile } from "@/components/music/UserProfile"
 import { TrackCard } from "@/components/music/TrackCard"
+import { SearchTracks } from "@/components/music/SearchTracks"
 import { MusicVisualizer } from "@/components/music/MusicVisualizer"
 import { useAuth } from "@/contexts/AuthContext"
-import { apiService, type Track, type FormattedTrack, type RecommendationResponse } from "@/services/api"
-import { Zap, Music2, Settings, Target, CheckCircle, RefreshCw, Loader2 } from "lucide-react"
+import { apiService, type Track, type FormattedTrack, type RecommendationResponse, type UserPlaylist } from "@/services/api"
+import { Zap, Music2, Settings, Target, CheckCircle, RefreshCw, Loader2, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import heroBackground from "@/assets/hero-bg.jpg"
 
@@ -31,10 +32,20 @@ const Index = () => {
   const [currentView, setCurrentView] = useState<"landing" | "selection" | "recommendations">("landing")
   const [isGenerating, setIsGenerating] = useState(false)
   const [isCollectingData, setIsCollectingData] = useState(false)
+  const [isUpdatingPlaylist, setIsUpdatingPlaylist] = useState(false)
   const [recommendationCount, setRecommendationCount] = useState("20")
   const [playlistUrl, setPlaylistUrl] = useState("")
   const [playlistName, setPlaylistName] = useState("")
+  const [updatedPlaylistUrl, setUpdatedPlaylistUrl] = useState("")
+  const [userPlaylists, setUserPlaylists] = useState<UserPlaylist[]>([])
+  const [selectedPlaylist, setSelectedPlaylist] = useState<string>("")
+  const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false)
   const [recommendations, setRecommendations] = useState<FormattedTrack[]>([])
+  const [searchedTracks, setSearchedTracks] = useState<Track[]>([])
+  const [activeTab, setActiveTab] = useState("topTracksShort")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
+  const [, forceUpdate] = useState(0)
   const [userTracks, setUserTracks] = useState<{
     topTracksShort: Track[];
     topTracksMedium: Track[];
@@ -63,10 +74,47 @@ const Index = () => {
     if (isAuthenticated && profile) {
       // Try to load existing tracks data
       apiService.getUserTracks()
-        .then(tracks => setUserTracks(tracks))
+        .then(tracks => {
+          setUserTracks(tracks)
+        })
         .catch(error => console.log('No tracks data available yet'))
     }
   }, [isAuthenticated, profile])
+
+  // Set last sync time from data summary
+  useEffect(() => {
+    if (dataSummary?.profile?.lastUpdated) {
+      setLastSyncTime(new Date(dataSummary.profile.lastUpdated))
+    }
+  }, [dataSummary])
+
+  // Force re-render every 30 seconds to check if sync is needed
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (lastSyncTime) {
+        // Force a re-render
+        forceUpdate(prev => prev + 1)
+      }
+    }, 30000) // Check every 30 seconds
+
+    return () => clearInterval(interval)
+  }, [lastSyncTime])
+
+  // Load playlists when recommendations are generated
+  useEffect(() => {
+    if (currentView === "recommendations" && isAuthenticated && userPlaylists.length === 0) {
+      loadUserPlaylists()
+    }
+  }, [currentView, isAuthenticated])
+
+  // Check if sync is needed (more than 2 days ago)
+  const isSyncNeeded = () => {
+    if (!lastSyncTime) return false
+    const now = new Date()
+    const diffMs = now.getTime() - lastSyncTime.getTime()
+    const diffDays = diffMs / (1000 * 60 * 60 * 24)
+    return diffDays > 2
+  }
 
   const handleLogin = async () => {
     try {
@@ -108,6 +156,7 @@ const Index = () => {
       // After data collection, fetch tracks for selection
       const tracks = await apiService.getUserTracks()
       setUserTracks(tracks)
+      setLastSyncTime(new Date())
       toast({
         title: "✅ Data synced!",
         description: "Your Spotify data has been updated successfully.",
@@ -123,12 +172,29 @@ const Index = () => {
     }
   }
 
-  const handleTrackSelect = (trackId: string, selected: boolean) => {
-    const track = Object.values(userTracks).flat().find(t => t.id === trackId)
-    if (!track) return
-
+  const handleTrackSelect = (trackId: string, selected: boolean, searchTrack?: Track) => {
     if (selected) {
-      setSelectedTracks([...selectedTracks, track])
+      // First check if it's already selected
+      if (selectedTracks.some(t => t.id === trackId)) return
+
+      // If we have a search track, use it directly
+      if (searchTrack) {
+        setSelectedTracks([...selectedTracks, searchTrack])
+        // Also add to searchedTracks if not already there
+        if (!searchedTracks.some(t => t.id === searchTrack.id)) {
+          setSearchedTracks([...searchedTracks, searchTrack])
+        }
+        return
+      }
+
+      // Otherwise try to find track in user tracks
+      const track = Object.values(userTracks).flat().find(t => t.id === trackId)
+      if (track) {
+        setSelectedTracks([...selectedTracks, track])
+        return
+      }
+
+      console.warn(`Track ${trackId} not found in user tracks`)
     } else {
       setSelectedTracks(selectedTracks.filter(t => t.id !== trackId))
     }
@@ -221,18 +287,42 @@ const Index = () => {
     }
   }
 
-  const updatePlaylist = async () => {
-    if (!playlistUrl.trim()) {
+  const loadUserPlaylists = async () => {
+    if (!isAuthenticated) return
+
+    setIsLoadingPlaylists(true)
+    try {
+      const response = await apiService.getUserPlaylists()
+      setUserPlaylists(response.playlists)
+    } catch (error) {
+      console.error('Failed to load playlists:', error)
       toast({
-        title: "⚠️ Playlist URL required",
-        description: "Please enter a Spotify playlist URL.",
+        title: "❌ Failed to load playlists",
+        description: "Could not fetch your playlists. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoadingPlaylists(false)
+    }
+  }
+
+  const updatePlaylist = async () => {
+    const playlistId = selectedPlaylist || playlistUrl.trim()
+    
+    if (!playlistId) {
+      toast({
+        title: "⚠️ Playlist required",
+        description: "Please select a playlist or enter a URL.",
         variant: "destructive"
       })
       return
     }
 
+    setIsUpdatingPlaylist(true)
     try {
-      const response = await apiService.updatePlaylist(playlistUrl, recommendations)
+      const response = await apiService.updatePlaylist(playlistId, recommendations)
+      const selectedPlaylistData = userPlaylists.find(p => p.id === playlistId)
+      setUpdatedPlaylistUrl(selectedPlaylistData?.external_url || playlistUrl)
       
       toast({
         title: "🔄 Playlist updated!",
@@ -242,9 +332,11 @@ const Index = () => {
       console.error('Failed to update playlist:', error)
       toast({
         title: "❌ Playlist update failed",
-        description: "Could not update playlist. Please check the URL and try again.",
+        description: "Could not update playlist. Please try again.",
         variant: "destructive"
       })
+    } finally {
+      setIsUpdatingPlaylist(false)
     }
   }
 
@@ -401,11 +493,19 @@ const Index = () => {
                     {selectedTracks.length} selected
                   </Badge>
                   <Button 
-                    variant="outline" 
+                    variant={isSyncNeeded() ? "default" : "outline"}
                     size="sm"
                     onClick={() => handleCollectData(true)}
                     disabled={isCollectingData}
-                    className="w-full sm:w-auto"
+                    className={`w-full sm:w-auto transition-all ${
+                      isSyncNeeded() 
+                        ? 'animate-pulse-glow shadow-lg shadow-primary/50' 
+                        : ''
+                    }`}
+                    style={isSyncNeeded() ? {
+                      animation: 'pulseGlow 2s ease-in-out infinite',
+                      boxShadow: '0 0 20px hsl(141 73% 42% / 0.8)'
+                    } : {}}
                   >
                     {isCollectingData ? (
                       <>
@@ -415,9 +515,13 @@ const Index = () => {
                       </>
                     ) : (
                       <>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        <span className="hidden sm:inline">Sync Data</span>
-                        <span className="sm:hidden">Sync</span>
+                        <RefreshCw className={`h-4 w-4 mr-2 ${isSyncNeeded() ? 'animate-spin' : ''}`} />
+                        <span className="hidden sm:inline">
+                          {isSyncNeeded() ? '⚡ Sync Data Now!' : 'Sync Data'}
+                        </span>
+                        <span className="sm:hidden">
+                          {isSyncNeeded() ? '⚡ Sync!' : 'Sync'}
+                        </span>
                       </>
                     )}
                   </Button>
@@ -446,8 +550,9 @@ const Index = () => {
                   </Button>
                 </Card>
               ) : (
-                <Tabs defaultValue="topTracksShort" className="space-y-4 sm:space-y-6">
-                  <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+                <div className="space-y-4 sm:space-y-6">
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+                    <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto">
                     <TabsTrigger value="topTracksShort" className="text-xs sm:text-sm p-2 min-w-0">
                       <span className="hidden sm:inline truncate">Top Tracks - 4 Weeks</span>
                       <span className="sm:hidden truncate">Top - 4W</span>
@@ -464,7 +569,46 @@ const Index = () => {
                       <span className="hidden sm:inline truncate">Saved Tracks</span>
                       <span className="sm:hidden truncate">Saved</span>
                     </TabsTrigger>
+                    <TabsTrigger value="search" className="text-xs sm:text-sm p-2 min-w-0">
+                      <span className="hidden sm:inline truncate">Search</span>
+                      <span className="sm:hidden truncate">Search</span>
+                    </TabsTrigger>
                   </TabsList>
+
+                  {/* Global Search Input */}
+                  <Card className="p-4 sm:p-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2">
+                        <Search className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                        <h3 className="text-base sm:text-lg font-semibold">Search Spotify</h3>
+                      </div>
+                      
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          type="text"
+                          placeholder="Search for songs, artists, or albums..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onFocus={() => setActiveTab("search")}
+                          className="pl-10 pr-20 text-sm sm:text-base"
+                        />
+                        {searchQuery && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSearchQuery("")
+                              setActiveTab("topTracksShort")
+                            }}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                          >
+                            ×
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
 
                   {Object.entries(userTracks).map(([key, tracks]) => (
                     <TabsContent key={key} value={key} className="space-y-4">
@@ -522,7 +666,19 @@ const Index = () => {
                       )}
                     </TabsContent>
                   ))}
-                </Tabs>
+
+                  <TabsContent value="search" className="space-y-4">
+                    <SearchTracks
+                      selectedTracks={selectedTracks}
+                      onTrackSelect={handleTrackSelect}
+                      searchedTracks={searchedTracks}
+                      onSearchedTracksUpdate={setSearchedTracks}
+                      searchQuery={searchQuery}
+                      onSearchQueryChange={setSearchQuery}
+                    />
+                  </TabsContent>
+                  </Tabs>
+                </div>
               )}
             </div>
 
@@ -674,23 +830,84 @@ const Index = () => {
               
               <div className="space-y-4">
                 <h3 className="text-base sm:text-lg font-semibold">Update Existing Playlist</h3>
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
+                
+                {/* Playlist Selector */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Select a playlist:</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={loadUserPlaylists}
+                      disabled={isLoadingPlaylists}
+                      className="text-xs"
+                    >
+                      {isLoadingPlaylists ? (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                      )}
+                      Refresh
+                    </Button>
+                  </div>
+                  
+                  <Select value={selectedPlaylist} onValueChange={setSelectedPlaylist}>
+                    <SelectTrigger className="text-sm sm:text-base">
+                      <SelectValue placeholder={isLoadingPlaylists ? "Loading playlists..." : "Choose a playlist"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {userPlaylists.map((playlist) => (
+                        <SelectItem key={playlist.id} value={playlist.id}>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium">{playlist.name}</span>
+                            <span className="text-xs text-muted-foreground">({playlist.tracks_total} tracks)</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Or URL Input */}
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">Or paste playlist URL:</label>
                   <Input 
                     placeholder="https://open.spotify.com/playlist/..."
                     value={playlistUrl}
                     onChange={(e) => setPlaylistUrl(e.target.value)}
-                    className="flex-1 text-sm sm:text-base"
+                    className="text-sm sm:text-base"
                   />
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Button 
                     variant="outline" 
                     onClick={updatePlaylist}
-                    disabled={!playlistUrl.trim() || recommendations.length === 0}
+                    disabled={(!selectedPlaylist && !playlistUrl.trim()) || recommendations.length === 0 || isUpdatingPlaylist}
                     className="w-full sm:w-auto text-sm sm:text-base"
                   >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">Replace</span>
-                    <span className="sm:hidden">Update Playlist</span>
+                    {isUpdatingPlaylist ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    <span className="hidden sm:inline">
+                      {isUpdatingPlaylist ? "Updating..." : "Replace Tracks"}
+                    </span>
+                    <span className="sm:hidden">
+                      {isUpdatingPlaylist ? "Updating..." : "Update"}
+                    </span>
                   </Button>
+                  {updatedPlaylistUrl && (
+                    <Button 
+                      variant="default" 
+                      onClick={() => window.open(updatedPlaylistUrl, '_blank')}
+                      className="w-full sm:w-auto text-sm sm:text-base"
+                    >
+                      <Music2 className="h-4 w-4 mr-2" />
+                      Open in Spotify
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

@@ -11,7 +11,7 @@
     "build": "node build.js && tsc -p tsconfig.backend.json",
     "build:frontend": "node build.js",
     "build:backend": "tsc -p tsconfig.backend.json",
-    "lint": "eslint .",
+    "lint": "eslint . --fix",
     "start": "node dist/backend/server.js"
   },
   "dependencies": {
