@@ -5,7 +5,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/backend/server.ts",
+    "dev": "concurrently \"node build.js --watch\" \"tsx --watch src/backend/server.ts\" --names \"frontend,backend\" --prefix-colors \"cyan,magenta\"",
+    "dev:frontend": "node build.js --watch",
+    "dev:backend": "tsx --watch src/backend/server.ts",
     "build": "node build.js && tsc -p tsconfig.backend.json",
     "build:frontend": "node build.js",
     "build:backend": "tsc -p tsconfig.backend.json",
@@ -81,6 +83,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^8.2.2",
     "esbuild": "^0.25.8",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",

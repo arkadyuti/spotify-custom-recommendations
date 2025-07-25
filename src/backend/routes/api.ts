@@ -322,10 +322,14 @@ router.get('/test-auth', async (req: Request, res: Response) => {
     res.json({
       message: 'Authentication working!',
       profile: {
-        name: profile.display_name,
+        id: profile.id,
+        display_name: profile.display_name,
         email: profile.email,
         country: profile.country,
-        followers: profile.followers?.total || 0
+        followers: {
+          total: profile.followers?.total || 0
+        },
+        images: profile.images || []
       }
     });
   } catch (error) {

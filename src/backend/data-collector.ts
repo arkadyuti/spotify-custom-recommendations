@@ -159,12 +159,29 @@ export class DataCollectorService {
       const recentlyPlayed = await api.getRecentlyPlayed(50);
       this.userData.recentlyPlayed = recentlyPlayed.items.map(transformRecentlyPlayedItem);
 
-      // Get saved tracks
+      // Get saved tracks (fetch all with pagination)
       console.log('Fetching saved tracks...');
       try {
-        const savedTracks = await api.getSavedTracks(50);
-        this.userData.savedTracks = savedTracks.items.map(transformSavedTrackItem);
-        console.log(`✅ Got ${this.userData.savedTracks.length} saved tracks`);
+        this.userData.savedTracks = [];
+        let offset = 0;
+        const limit = 50;
+        let hasMore = true;
+
+        while (hasMore) {
+          const savedTracks = await api.getSavedTracks(limit, offset);
+          console.log(`API returned ${savedTracks.items.length} tracks, total available: ${savedTracks.total}, offset: ${offset}`);
+          
+          const transformedTracks = savedTracks.items.map(transformSavedTrackItem);
+          this.userData.savedTracks.push(...transformedTracks);
+          
+          offset += limit;
+          hasMore = savedTracks.items.length === limit && offset < savedTracks.total;
+          
+          if (hasMore) {
+            console.log(`Fetched ${offset} saved tracks, continuing... (${this.userData.savedTracks.length} total so far)`);
+          }
+        }
+        console.log(`✅ Got ${this.userData.savedTracks.length} saved tracks (all)`);
       } catch (error) {
         console.log(`⚠️ Could not fetch saved tracks: ${(error as Error).message}`);
         this.userData.savedTracks = [];

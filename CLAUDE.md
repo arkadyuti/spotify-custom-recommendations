@@ -5,7 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ### Development
-- `yarn dev` - Start the Express server (serves React app + API)
+- `yarn dev` - Start both frontend watcher and Express server concurrently
+- `yarn dev:frontend` - Start only frontend watcher (esbuild + Tailwind)
+- `yarn dev:backend` - Start only backend server with watch mode
 - `yarn build` - Build both frontend (esbuild) and backend (TypeScript)
 - `yarn start` - Start production server from built files
 - `yarn lint` - Run ESLint for code linting
@@ -90,3 +92,13 @@ NODE_ENV=development
 - `/api/create-playlist` - Create Spotify playlist from recommendations
 - `/api/update-playlist` - Update existing playlist
 - `/api/user-tracks` - Get user tracks for selection
+
+## Recent Fixes
+
+### Development & UX Improvements ✅
+1. **yarn dev command enhanced** - Now runs concurrent frontend watcher and backend server with hot reload for both React changes and server restarts
+2. **Page refresh on tab switch resolved** - Reduced aggressive auth checking to only refresh after 5+ minutes of inactivity
+3. **Authentication success page styling updated** - Now matches application theme with proper dark/light mode support and modern UI
+4. **Frontend hot reload fixed** - Changes to React components now reflect immediately without manual refresh
+5. **Username display fixed** - Backend API now returns correct `display_name` field for proper username display in header and throughout app
+6. **Mobile responsiveness overhauled** - Complete mobile-first redesign with responsive layouts, touch-friendly interactions, and optimized content hierarchy

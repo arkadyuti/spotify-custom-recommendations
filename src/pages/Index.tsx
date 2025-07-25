@@ -263,7 +263,7 @@ const Index = () => {
   // Landing Page View
   if (currentView === "landing") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background sm:overflow-x-auto overflow-x-hidden">
         <Header 
           isAuthenticated={isAuthenticated}
           userName={profile?.display_name || null}
@@ -272,30 +272,31 @@ const Index = () => {
         />
         
         <div 
-          className="relative min-h-[80vh] bg-cover bg-center bg-no-repeat"
+          className="relative min-h-[60vh] sm:min-h-[70vh] lg:min-h-[80vh] bg-cover bg-center bg-no-repeat"
           style={{ backgroundImage: `url(${heroBackground})` }}
         >
           <div className="absolute inset-0 bg-black/60" />
-          <div className="relative container mx-auto px-4 py-20">
-            <div className="max-w-4xl mx-auto">
-              <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="relative container mx-auto px-4 py-8 sm:py-12 lg:py-20">
+            <div className="max-w-6xl mx-auto">
+              <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
                 {/* Left Panel - Hero Content */}
-                <div className="space-y-8 animate-slide-up">
+                <div className="space-y-6 sm:space-y-8 animate-slide-up text-center lg:text-left">
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <MusicVisualizer className="h-8" />
-                      <Badge className="bg-primary/20 text-primary border-primary/30">
-                        AI-Powered Music Discovery
+                    <div className="flex items-center justify-center lg:justify-start space-x-2">
+                      <MusicVisualizer className="h-6 sm:h-8" />
+                      <Badge className="bg-primary/20 text-primary border-primary/30 text-xs sm:text-sm">
+                        <span className="hidden sm:inline">AI-Powered Music Discovery</span>
+                        <span className="sm:hidden">AI Music Discovery</span>
                       </Badge>
                     </div>
-                    <h1 className="text-5xl lg:text-6xl font-bold text-white leading-tight">
-                      Discover Your 
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight">
+                      <span className="block sm:inline">Discover Your</span>
                       <span className="bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
                         {" "}Next Favorite
                       </span>
                       {" "}Songs
                     </h1>
-                    <p className="text-xl text-gray-200 leading-relaxed">
+                    <p className="text-base sm:text-lg lg:text-xl text-gray-200 leading-relaxed max-w-2xl mx-auto lg:mx-0">
                       Get personalized Spotify recommendations based on your listening history. 
                       Our AI analyzes your music taste to find hidden gems you'll love.
                     </p>
@@ -305,60 +306,62 @@ const Index = () => {
                     <Button 
                       onClick={handleLogin}
                       size="lg"
-                      className="spotify-button text-lg px-8 py-4 animate-glow"
+                      className="spotify-button text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 animate-glow w-full sm:w-auto"
                     >
-                      <Zap className="h-5 w-5 mr-2" />
+                      <Zap className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                       Connect with Spotify
                     </Button>
-                    <p className="text-sm text-gray-300">
-                      • No account creation required • Secure OAuth connection • Instant recommendations
+                    <p className="text-xs sm:text-sm text-gray-300 text-center lg:text-left">
+                      <span className="block sm:inline">• No account creation required</span>
+                      <span className="block sm:inline"> • Secure OAuth connection</span>
+                      <span className="block sm:inline"> • Instant recommendations</span>
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 pt-8">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-6 sm:pt-8">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-white">10M+</div>
-                      <div className="text-sm text-gray-300">Songs Analyzed</div>
+                      <div className="text-lg sm:text-2xl font-bold text-white">10M+</div>
+                      <div className="text-xs sm:text-sm text-gray-300">Songs Analyzed</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-white">95%</div>
-                      <div className="text-sm text-gray-300">Accuracy Rate</div>
+                      <div className="text-lg sm:text-2xl font-bold text-white">95%</div>
+                      <div className="text-xs sm:text-sm text-gray-300">Accuracy Rate</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-white">1M+</div>
-                      <div className="text-sm text-gray-300">Happy Users</div>
+                      <div className="text-lg sm:text-2xl font-bold text-white">1M+</div>
+                      <div className="text-xs sm:text-sm text-gray-300">Happy Users</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Right Panel - Preview Card */}
-                <div className="animate-fade-in">
-                  <Card className="p-6 glass-card">
+                <div className="animate-fade-in mt-8 lg:mt-0">
+                  <Card className="p-4 sm:p-6 glass-card">
                     <div className="space-y-4">
                       <div className="flex items-center space-x-2">
                         <Target className="h-5 w-5 text-primary" />
-                        <h3 className="text-lg font-semibold">How it works</h3>
+                        <h3 className="text-base sm:text-lg font-semibold">How it works</h3>
                       </div>
                       <div className="space-y-3">
                         <div className="flex items-start space-x-3">
-                          <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-sm font-bold text-primary-foreground">1</div>
-                          <div>
-                            <div className="font-medium">Connect your Spotify</div>
-                            <div className="text-sm text-muted-foreground">Secure OAuth authentication</div>
+                          <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-sm font-bold text-primary-foreground flex-shrink-0">1</div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm sm:text-base">Connect your Spotify</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground">Secure OAuth authentication</div>
                           </div>
                         </div>
                         <div className="flex items-start space-x-3">
-                          <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-sm font-bold text-primary-foreground">2</div>
-                          <div>
-                            <div className="font-medium">Select your favorite tracks</div>
-                            <div className="text-sm text-muted-foreground">From your top songs and playlists</div>
+                          <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-sm font-bold text-primary-foreground flex-shrink-0">2</div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm sm:text-base">Select your favorite tracks</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground">From your top songs and playlists</div>
                           </div>
                         </div>
                         <div className="flex items-start space-x-3">
-                          <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-sm font-bold text-primary-foreground">3</div>
-                          <div>
-                            <div className="font-medium">Get AI recommendations</div>
-                            <div className="text-sm text-muted-foreground">Personalized just for your taste</div>
+                          <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-sm font-bold text-primary-foreground flex-shrink-0">3</div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm sm:text-base">Get AI recommendations</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground">Personalized just for your taste</div>
                           </div>
                         </div>
                       </div>
@@ -376,7 +379,7 @@ const Index = () => {
   // Track Selection View
   if (currentView === "selection") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background sm:overflow-x-auto overflow-x-hidden">
         <Header 
           isAuthenticated={isAuthenticated}
           userName={profile?.display_name || null}
@@ -384,34 +387,37 @@ const Index = () => {
           onLogout={handleLogout}
         />
         
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid lg:grid-cols-4 gap-8">
+        <div className="container mx-auto px-4 py-6 sm:py-8">
+          <div className="flex flex-col lg:grid lg:grid-cols-4 gap-6 lg:gap-8">
             {/* Main Content - Track Selection */}
-            <div className="lg:col-span-3 space-y-6">
-              <div className="flex items-center justify-between">
+            <div className="lg:col-span-3 space-y-4 sm:space-y-6 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <h2 className="text-3xl font-bold text-foreground">Select Your Tracks</h2>
-                  <p className="text-muted-foreground">Choose tracks that represent your music taste</p>
+                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground">Select Your Tracks</h2>
+                  <p className="text-sm sm:text-base text-muted-foreground">Choose tracks that represent your music taste</p>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <Badge variant="secondary" className="text-lg px-4 py-2">
-                    {selectedTracks.length} tracks selected
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                  <Badge variant="secondary" className="text-sm sm:text-base px-3 py-1 sm:px-4 sm:py-2 w-fit">
+                    {selectedTracks.length} selected
                   </Badge>
                   <Button 
                     variant="outline" 
                     size="sm"
                     onClick={() => handleCollectData(true)}
                     disabled={isCollectingData}
+                    className="w-full sm:w-auto"
                   >
                     {isCollectingData ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Syncing...
+                        <span className="hidden sm:inline">Syncing...</span>
+                        <span className="sm:hidden">Sync...</span>
                       </>
                     ) : (
                       <>
                         <RefreshCw className="h-4 w-4 mr-2" />
-                        Sync Data
+                        <span className="hidden sm:inline">Sync Data</span>
+                        <span className="sm:hidden">Sync</span>
                       </>
                     )}
                   </Button>
@@ -440,23 +446,36 @@ const Index = () => {
                   </Button>
                 </Card>
               ) : (
-                <Tabs defaultValue="topTracksShort" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="topTracksShort">Top Tracks - 4 Weeks</TabsTrigger>
-                    <TabsTrigger value="topTracksMedium">Top Tracks - 6 Months</TabsTrigger>
-                    <TabsTrigger value="recentlyPlayed">Recently Played</TabsTrigger>
-                    <TabsTrigger value="savedTracks">Saved Tracks</TabsTrigger>
+                <Tabs defaultValue="topTracksShort" className="space-y-4 sm:space-y-6">
+                  <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+                    <TabsTrigger value="topTracksShort" className="text-xs sm:text-sm p-2 min-w-0">
+                      <span className="hidden sm:inline truncate">Top Tracks - 4 Weeks</span>
+                      <span className="sm:hidden truncate">Top - 4W</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="topTracksMedium" className="text-xs sm:text-sm p-2 min-w-0">
+                      <span className="hidden sm:inline truncate">Top Tracks - 6 Months</span>
+                      <span className="sm:hidden truncate">Top - 6M</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="recentlyPlayed" className="text-xs sm:text-sm p-2 min-w-0">
+                      <span className="hidden sm:inline truncate">Recently Played</span>
+                      <span className="sm:hidden truncate">Recent</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="savedTracks" className="text-xs sm:text-sm p-2 min-w-0">
+                      <span className="hidden sm:inline truncate">Saved Tracks</span>
+                      <span className="sm:hidden truncate">Saved</span>
+                    </TabsTrigger>
                   </TabsList>
 
                   {Object.entries(userTracks).map(([key, tracks]) => (
                     <TabsContent key={key} value={key} className="space-y-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div className="flex items-center space-x-2">
                           <Button 
                             variant="outline" 
                             size="sm"
                             onClick={() => handleSelectAll(key as keyof typeof userTracks)}
                             disabled={tracks.length === 0}
+                            className="text-xs sm:text-sm"
                           >
                             Select All
                           </Button>
@@ -464,11 +483,12 @@ const Index = () => {
                             variant="outline" 
                             size="sm"
                             onClick={() => handleSelectNone(key as keyof typeof userTracks)}
+                            className="text-xs sm:text-sm"
                           >
                             None
                           </Button>
                         </div>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-xs sm:text-sm text-muted-foreground">
                           {tracks.length} tracks available
                         </span>
                       </div>
@@ -507,7 +527,8 @@ const Index = () => {
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6 order-first lg:order-last">
+              {/* User Profile - First on mobile, stays on mobile */}
               {profile && dataSummary && (
                 <UserProfile 
                   user={{
@@ -530,18 +551,19 @@ const Index = () => {
                 />
               )}
 
-              <Card className="p-6">
+              {/* Settings Card - Always visible */}
+              <Card className="p-4 sm:p-6">
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2">
-                    <Settings className="h-5 w-5 text-primary" />
-                    <h3 className="text-lg font-semibold">Settings</h3>
+                    <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                    <h3 className="text-base sm:text-lg font-semibold">Settings</h3>
                   </div>
                   
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Recommendation Count</label>
+                      <label className="text-xs sm:text-sm font-medium">Recommendation Count</label>
                       <Select value={recommendationCount} onValueChange={setRecommendationCount}>
-                        <SelectTrigger>
+                        <SelectTrigger className="text-sm">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -554,28 +576,31 @@ const Index = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Playlist URL (Optional)</label>
+                      <label className="text-xs sm:text-sm font-medium">Playlist URL (Optional)</label>
                       <Input 
                         placeholder="https://open.spotify.com/playlist/..."
                         value={playlistUrl}
                         onChange={(e) => setPlaylistUrl(e.target.value)}
+                        className="text-sm"
                       />
                     </div>
 
                     <Button 
-                      className="w-full spotify-button"
+                      className="w-full spotify-button text-sm sm:text-base"
                       disabled={isGenerating || selectedTracks.length === 0}
                       onClick={generateRecommendations}
                     >
                       {isGenerating ? (
                         <>
                           <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          Generating...
+                          <span className="hidden sm:inline">Generating...</span>
+                          <span className="sm:hidden">Gen...</span>
                         </>
                       ) : (
                         <>
                           <Target className="h-4 w-4 mr-2" />
-                          Generate Recommendations
+                          <span className="hidden sm:inline">Generate Recommendations</span>
+                          <span className="sm:hidden">Generate</span>
                         </>
                       )}
                     </Button>
@@ -597,7 +622,7 @@ const Index = () => {
 
   // Recommendations View
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background sm:overflow-x-auto overflow-x-hidden">
       <Header 
         isAuthenticated={isAuthenticated}
         userName={profile?.display_name || null}
@@ -605,61 +630,66 @@ const Index = () => {
         onLogout={handleLogout}
       />
       
-      <div className="container mx-auto px-4 py-8">
-        <div className="space-y-8">
+      <div className="container mx-auto px-4 py-6 sm:py-8">
+        <div className="space-y-6 sm:space-y-8">
           {/* Header */}
-          <div className="text-center space-y-4">
-            <h2 className="text-4xl font-bold text-foreground flex items-center justify-center">
-              <Target className="h-8 w-8 mr-3 text-primary" />
-              🎯 Your Custom Recommendations
+          <div className="text-center space-y-3 sm:space-y-4">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground flex items-center justify-center flex-wrap">
+              <Target className="h-6 w-6 sm:h-8 sm:w-8 mr-2 sm:mr-3 text-primary flex-shrink-0" />
+              <span className="break-words">🎯 Your Custom Recommendations</span>
             </h2>
-            <p className="text-lg text-muted-foreground">
-              Based on {selectedTracks.length} selected tracks • {recommendations.length} recommendations found
+            <p className="text-sm sm:text-base lg:text-lg text-muted-foreground px-4">
+              <span className="block sm:inline">Based on {selectedTracks.length} selected tracks</span>
+              <span className="hidden sm:inline"> • </span>
+              <span className="block sm:inline">{recommendations.length} recommendations found</span>
             </p>
           </div>
 
           {/* Playlist Management */}
-          <Card className="p-6">
-            <div className="grid md:grid-cols-2 gap-6">
+          <Card className="p-4 sm:p-6">
+            <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold flex items-center">
-                  <Music2 className="h-5 w-5 mr-2 text-primary" />
+                <h3 className="text-base sm:text-lg font-semibold flex items-center">
+                  <Music2 className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-primary" />
                   Create New Playlist
                 </h3>
-                <div className="flex space-x-2">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
                   <Input 
                     placeholder="My Awesome Playlist" 
                     value={playlistName}
                     onChange={(e) => setPlaylistName(e.target.value)}
-                    className="flex-1" 
+                    className="flex-1 text-sm sm:text-base" 
                   />
                   <Button 
                     onClick={createPlaylist} 
-                    className="spotify-button"
+                    className="spotify-button w-full sm:w-auto text-sm sm:text-base"
                     disabled={!playlistName.trim() || recommendations.length === 0}
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    Create
+                    <span className="hidden sm:inline">Create</span>
+                    <span className="sm:hidden">Create Playlist</span>
                   </Button>
                 </div>
               </div>
               
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Update Existing Playlist</h3>
-                <div className="flex space-x-2">
+                <h3 className="text-base sm:text-lg font-semibold">Update Existing Playlist</h3>
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
                   <Input 
                     placeholder="https://open.spotify.com/playlist/..."
                     value={playlistUrl}
                     onChange={(e) => setPlaylistUrl(e.target.value)}
-                    className="flex-1"
+                    className="flex-1 text-sm sm:text-base"
                   />
                   <Button 
                     variant="outline" 
                     onClick={updatePlaylist}
                     disabled={!playlistUrl.trim() || recommendations.length === 0}
+                    className="w-full sm:w-auto text-sm sm:text-base"
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
-                    Replace
+                    <span className="hidden sm:inline">Replace</span>
+                    <span className="sm:hidden">Update Playlist</span>
                   </Button>
                 </div>
               </div>
@@ -698,11 +728,11 @@ const Index = () => {
           )}
 
           {/* Back to Selection */}
-          <div className="text-center">
+          <div className="text-center pt-4">
             <Button 
               variant="outline" 
               onClick={() => setCurrentView("selection")}
-              className="px-8 py-3"
+              className="px-6 py-2 sm:px-8 sm:py-3 text-sm sm:text-base w-full sm:w-auto"
             >
               ← Back to Track Selection
             </Button>

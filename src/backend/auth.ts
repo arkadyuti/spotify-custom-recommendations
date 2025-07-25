@@ -165,14 +165,154 @@ router.get('/callback', async (req: Request, res: Response) => {
     }
     
     res.send(`
-      <h1>Authentication successful!</h1>
-      <p>Welcome${req.session.userDisplayName ? `, ${req.session.userDisplayName}` : ''}!</p>
-      <p>Redirecting to home page...</p>
-      <script>
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 2000);
-      </script>
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Authentication Successful - Spotify RecoEngine</title>
+          <style>
+            :root {
+              --background: 0 0% 100%;
+              --foreground: 0 0% 9%;
+              --primary: 141 73% 42%;
+              --primary-foreground: 0 0% 100%;
+              --card: 0 0% 100%;
+              --card-foreground: 0 0% 9%;
+              --muted-foreground: 215 16% 47%;
+              --shadow-card: 0 4px 20px -4px hsl(0 0% 0% / 0.1);
+              --radius: 0.75rem;
+            }
+            
+            @media (prefers-color-scheme: dark) {
+              :root {
+                --background: 0 0% 7%;
+                --foreground: 0 0% 95%;
+                --card: 0 0% 9%;
+                --card-foreground: 0 0% 95%;
+                --muted-foreground: 217.9 10.6% 64.9%;
+              }
+            }
+            
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+              background-color: hsl(var(--background));
+              color: hsl(var(--foreground));
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 1rem;
+            }
+            
+            .container {
+              max-width: 28rem;
+              width: 100%;
+            }
+            
+            .card {
+              background-color: hsl(var(--card));
+              color: hsl(var(--card-foreground));
+              border-radius: var(--radius);
+              padding: 2rem;
+              text-align: center;
+              box-shadow: var(--shadow-card);
+              border: 1px solid hsl(214 32% 91%);
+            }
+            
+            .icon {
+              width: 4rem;
+              height: 4rem;
+              margin: 0 auto 1.5rem;
+              background-color: hsl(var(--primary));
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 1.5rem;
+            }
+            
+            h1 {
+              font-size: 1.5rem;
+              font-weight: 700;
+              margin-bottom: 0.5rem;
+              color: hsl(var(--foreground));
+            }
+            
+            .welcome {
+              font-size: 1rem;
+              color: hsl(var(--muted-foreground));
+              margin-bottom: 1rem;
+            }
+            
+            .redirect-info {
+              font-size: 0.875rem;
+              color: hsl(var(--muted-foreground));
+              margin-bottom: 1.5rem;
+            }
+            
+            .progress-bar {
+              width: 100%;
+              height: 0.25rem;
+              background-color: hsl(214 32% 91%);
+              border-radius: 0.125rem;
+              overflow: hidden;
+            }
+            
+            .progress-fill {
+              height: 100%;
+              background-color: hsl(var(--primary));
+              width: 0%;
+              animation: progress 2s ease-in-out forwards;
+            }
+            
+            @keyframes progress {
+              to {
+                width: 100%;
+              }
+            }
+            
+            .fade-in {
+              animation: fadeIn 0.5s ease-in;
+            }
+            
+            @keyframes fadeIn {
+              from {
+                opacity: 0;
+                transform: translateY(1rem);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container fade-in">
+            <div class="card">
+              <div class="icon">✅</div>
+              <h1>Authentication successful!</h1>
+              <p class="welcome">Welcome${req.session.userDisplayName ? `, ${req.session.userDisplayName}` : ''}!</p>
+              <p class="redirect-info">Redirecting to home page...</p>
+              <div class="progress-bar">
+                <div class="progress-fill"></div>
+              </div>
+            </div>
+          </div>
+          <script>
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 2000);
+          </script>
+        </body>
+      </html>
     `);
   } catch (error: any) {
     console.error('Authentication error:', error);

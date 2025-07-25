@@ -165,11 +165,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshAuth();
   }, []);
 
-  // Check auth status when returning to the tab/window
+  // Optional: Check auth status when returning to tab after being away for a long time
   useEffect(() => {
+    let lastCheck = Date.now();
+    
     const handleVisibilityChange = () => {
       if (!document.hidden && authState.isAuthenticated) {
-        refreshAuth();
+        const now = Date.now();
+        const timeSinceLastCheck = now - lastCheck;
+        
+        // Only refresh if we've been away for more than 5 minutes
+        if (timeSinceLastCheck > 5 * 60 * 1000) {
+          refreshAuth();
+        }
+        lastCheck = now;
       }
     };
 
