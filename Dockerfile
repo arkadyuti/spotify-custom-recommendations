@@ -36,8 +36,8 @@ COPY --from=deps /app/.yarnrc ./
 # Copy source code
 COPY . .
 
-# Create data directory for persistence
-RUN mkdir -p ./data/tokens && chown -R spotify:nodejs ./data
+# Build the application (frontend + backend)
+RUN yarn build
 
 # Set ownership
 RUN chown -R spotify:nodejs /app

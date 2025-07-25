@@ -5,68 +5,88 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ### Development
-- `yarn start` or `yarn dev` - Start the Express server on port 3005
-- `node src/index.js` - Alternative way to start the application
+- `yarn dev` - Start the Express server (serves React app + API)
+- `yarn build` - Build both frontend (esbuild) and backend (TypeScript)
+- `yarn start` - Start production server from built files
+- `yarn lint` - Run ESLint for code linting
 
 ### Dependencies
-- `yarn install` - Install dependencies (uses Yarn 4.4.1 as package manager)
+- `yarn install` - Install dependencies (uses Yarn as package manager)
+
+## Product Overview
+
+**Spotify RecoEngine** - AI-powered music discovery platform with modern React frontend and integrated Express backend. Analyzes Spotify listening history to generate personalized recommendations using custom multi-strategy algorithms.
 
 ## Architecture
 
-This is a Node.js/Express web application that provides a Spotify recommendation engine with OAuth authentication.
+### Single Server Architecture
+- **Frontend**: React 18 + TypeScript + esbuild
+- **Backend**: Express + TypeScript + MongoDB
+- **Integration**: Single server serving both static files and API endpoints on port 3005
+- **Database**: MongoDB for user data, tokens, and analytics persistence
 
-### Core Structure
-- **Entry Point**: `src/index.js` - Main Express server with HTML-based UI
-- **Authentication**: `src/auth.js` - Spotify OAuth flow with persistent token storage
-- **API Layer**: `src/spotify-api.js` - Spotify Web API client with automatic token refresh
-- **Data Collection**: `src/data-collector.js` - Gathers user listening data from Spotify
-- **Storage**: `src/data-storage.js` - Persistent local data storage using node-persist
-- **Recommendations**: `src/recommendation-engine.js` and `src/custom-recommender.js` - Music recommendation algorithms
-- **UI**: `src/recommendations-page.js` - Generates recommendation interface
+### Backend Structure (`src/backend/`)
+```
+src/backend/
+├── auth.ts                 # OAuth 2.0 + session management
+├── spotify-api.ts          # Spotify Web API client
+├── data-collector.ts       # User data collection with lean transformation
+├── data-transformer.ts     # 90%+ storage reduction
+├── database/
+│   ├── mongodb.ts          # MongoDB connection
+│   └── storage.ts          # Data persistence layer
+├── engines/
+│   ├── basic.ts            # Basic recommendation engine
+│   └── custom.ts           # Multi-strategy engine (CRITICAL)
+├── routes/
+│   ├── auth.ts             # Authentication routes
+│   └── api.ts              # API routes for recommendations
+└── server.ts               # Express server setup
+```
 
-### Key Dependencies
-- **@spotify/web-api-ts-sdk** - Official Spotify Web API SDK
-- **express** - Web server framework
-- **node-persist** - Local file-based storage for tokens and user data
-- **dotenv** - Environment variable management
-- **axios** - HTTP client for API requests
+### Frontend Structure (`src/`)
+- **Components**: Modern React with shadcn/ui components
+- **State Management**: React Query for server state
+- **API Integration**: Real backend integration with AuthContext
+- **Services**: Complete API client for backend communication
 
-### Authentication Flow
-The app uses Spotify OAuth 2.0 with:
-- Authorization code flow for initial login
-- Refresh token mechanism for session persistence
-- Tokens stored locally in `./data/tokens/` directory
-- Automatic token refresh on API calls
+## Core Algorithms (CRITICAL)
 
-### Data Architecture
-- User data collected includes: top tracks/artists, recently played, saved tracks, audio features
-- Data stored locally using node-persist in `./data/` directory
-- Analysis data includes listening patterns and genre preferences
+### Multi-Strategy Recommendation System
+1. **Artist-based discovery** (40% weight user mode, 50% independent)
+2. **Genre-based discovery** (30% weight, user mode only)
+3. **Keyword-based discovery** (30% weight user mode, 50% independent)
 
-### Environment Setup
-Requires `.env` file with:
-- `SPOTIFY_CLIENT_ID` - Spotify app client ID
-- `SPOTIFY_CLIENT_SECRET` - Spotify app client secret  
-- `REDIRECT_URI` - OAuth callback URL (typically ngrok URL for development)
-- `PORT` - Server port (defaults to 3005)
+### Dual Modes
+- **Independent**: Works with only input tracks (no user data required)
+- **User-based**: Leverages full user listening history and preferences
 
-### Development Workflow
-1. Requires ngrok tunnel for HTTPS OAuth callback during development
-2. Spotify app must be configured with matching redirect URI
-3. Users must be added to Spotify app's development mode user list
-4. Authentication tokens persist across server restarts
+### Advanced Features
+- Smart filtering and deduplication
+- Custom scoring with randomness factor
+- Session persistence with MongoDB
+- 90%+ storage reduction through lean data transformation
 
-### API Endpoints
-- `/` - Main dashboard with authentication status and user data summary
+## Environment Configuration
+
+```bash
+# Backend (Express)
+SPOTIFY_CLIENT_ID=your_spotify_client_id
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+REDIRECT_URI=your_ngrok_url/auth/callback
+SESSION_SECRET=your_secure_session_secret
+MONGODB_URI=mongodb://localhost:27017/spotify-recoengine
+PORT=3005
+NODE_ENV=development
+```
+
+## API Endpoints
+
 - `/auth/login` - Initiate Spotify OAuth flow
 - `/auth/callback` - OAuth callback handler
-- `/collect-data` - Sync user data from Spotify
-- `/recommendations` - Generate and display recommendations
-- `/api/recommendations` - REST endpoint for recommendations
+- `/api/collect-data` - User data synchronization
+- `/api/recommendations` - Independent recommendations engine
+- `/api/recommendations/user-based` - User preference integration
 - `/api/create-playlist` - Create Spotify playlist from recommendations
-
-### Limitations
-- Development mode restricts to 25 registered users
-- Local file storage (not production-ready)
-- Single-user session model
-- Requires manual ngrok URL updates during development
+- `/api/update-playlist` - Update existing playlist
+- `/api/user-tracks` - Get user tracks for selection

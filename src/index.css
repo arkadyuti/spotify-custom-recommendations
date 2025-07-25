@@ -1,0 +1,285 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Spotify-inspired design system with music-focused aesthetics */
+
+@layer base {
+  :root {
+    /* Core backgrounds - light theme base */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
+
+    /* Card components */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+
+    /* Popover components */
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
+
+    /* Spotify green primary */
+    --primary: 141 73% 42%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 141 73% 52%;
+
+    /* Secondary colors */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 0 0% 9%;
+
+    /* Muted colors */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Accent colors */
+    --accent: 210 40% 96%;
+    --accent-foreground: 0 0% 9%;
+
+    /* Destructive colors */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Border and input */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 141 73% 42%;
+
+    /* Music-specific colors */
+    --music-card: 0 0% 100%;
+    --music-card-hover: 210 40% 98%;
+    --music-progress: 141 73% 42%;
+    --popularity-high: 141 73% 42%;
+    --popularity-medium: 45 93% 47%;
+    --popularity-low: 0 84% 60%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(141 73% 42%), hsl(141 73% 52%));
+    --gradient-music: linear-gradient(135deg, hsl(141 73% 42%), hsl(171 73% 42%));
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(210 40% 98%));
+
+    /* Shadows */
+    --shadow-music: 0 10px 30px -10px hsl(141 73% 42% / 0.3);
+    --shadow-card: 0 4px 20px -4px hsl(0 0% 0% / 0.1);
+    --shadow-glow: 0 0 40px hsl(141 73% 52% / 0.4);
+
+    /* Border radius */
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Dark theme - Spotify-inspired */
+    --background: 0 0% 7%;
+    --foreground: 0 0% 95%;
+
+    /* Card components - dark */
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 95%;
+
+    /* Popover components - dark */
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 95%;
+
+    /* Spotify green remains consistent */
+    --primary: 141 73% 42%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 141 73% 52%;
+
+    /* Secondary dark */
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 95%;
+
+    /* Muted dark */
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 65%;
+
+    /* Accent dark */
+    --accent: 0 0% 14%;
+    --accent-foreground: 0 0% 95%;
+
+    /* Destructive dark */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Border and input dark */
+    --border: 0 0% 20%;
+    --input: 0 0% 14%;
+    --ring: 141 73% 42%;
+
+    /* Music-specific dark colors */
+    --music-card: 0 0% 12%;
+    --music-card-hover: 0 0% 16%;
+    --music-progress: 141 73% 42%;
+    --popularity-high: 141 73% 42%;
+    --popularity-medium: 45 93% 47%;
+    --popularity-low: 0 84% 60%;
+
+    /* Dark gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(141 73% 42%), hsl(141 73% 52%));
+    --gradient-music: linear-gradient(135deg, hsl(141 73% 42%), hsl(171 73% 42%));
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 9%), hsl(0 0% 12%));
+
+    /* Dark shadows */
+    --shadow-music: 0 10px 30px -10px hsl(141 73% 42% / 0.5);
+    --shadow-card: 0 4px 20px -4px hsl(0 0% 0% / 0.5);
+    --shadow-glow: 0 0 40px hsl(141 73% 52% / 0.6);
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
+
+@layer components {
+  /* Music player components */
+  .music-card {
+    @apply bg-[hsl(var(--music-card))] border border-border rounded-lg p-4 transition-all duration-300;
+    @apply hover:bg-[hsl(var(--music-card-hover))] hover:shadow-[var(--shadow-card)];
+  }
+
+  .music-button {
+    @apply bg-gradient-to-r from-[hsl(var(--primary))] to-[hsl(var(--primary-glow))];
+    @apply text-primary-foreground font-medium px-6 py-3 rounded-full;
+    @apply transition-all duration-300 hover:shadow-[var(--shadow-music)];
+    @apply hover:scale-105 active:scale-95;
+  }
+
+  .spotify-button {
+    @apply music-button shadow-[var(--shadow-music)];
+  }
+
+  .music-progress {
+    @apply bg-muted rounded-full h-2 overflow-hidden;
+  }
+
+  .music-progress-fill {
+    @apply bg-gradient-to-r from-[hsl(var(--music-progress))] to-[hsl(var(--primary-glow))];
+    @apply h-full transition-all duration-300 rounded-full;
+  }
+
+  /* Glass morphism effects */
+  .glass-card {
+    @apply backdrop-blur-md bg-white/10 dark:bg-black/20 border border-white/20;
+    @apply shadow-lg rounded-xl;
+  }
+
+  /* Animations */
+  .music-pulse {
+    @apply animate-pulse;
+  }
+
+  .music-visualizer {
+    @apply flex items-end space-x-1 h-6;
+  }
+
+  .music-bar {
+    @apply bg-gradient-to-t from-[hsl(var(--primary))] to-[hsl(var(--primary-glow))];
+    @apply w-1 rounded-full animate-pulse;
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .animate-music-bounce {
+    animation: musicBounce 1.5s ease-in-out infinite;
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.5s ease-out;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out;
+  }
+}
+
+@keyframes musicBounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-8px);
+  }
+  60% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.5);
+  }
+  to {
+    box-shadow: 0 0 30px hsl(var(--primary-glow) / 0.8);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
