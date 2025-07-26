@@ -8,9 +8,14 @@ interface HeaderProps {
   userName?: string | null
   onLogin?: () => void
   onLogout?: () => void
+  onWaitlistClick?: () => void
+  waitlistState?: {
+    hasOnboarded: boolean
+    status: 'pending' | 'approved' | null
+  }
 }
 
-export function Header({ isAuthenticated = false, userName, onLogin, onLogout }: HeaderProps) {
+export function Header({ isAuthenticated = false, userName, onLogin, onLogout, onWaitlistClick, waitlistState }: HeaderProps) {
   return (
     <header className="border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3 md:py-4">
@@ -48,13 +53,40 @@ export function Header({ isAuthenticated = false, userName, onLogin, onLogout }:
               </div>
             ) : (
               <Button 
-                onClick={onLogin}
+                onClick={() => {
+                  if (!waitlistState?.hasOnboarded) {
+                    onWaitlistClick?.()
+                  } else if (waitlistState?.status === 'approved') {
+                    onLogin?.()
+                  }
+                }}
                 size="sm"
-                className="spotify-button"
+                className={
+                  waitlistState?.status === 'approved' 
+                    ? "spotify-button" 
+                    : waitlistState?.hasOnboarded 
+                      ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                      : "spotify-button"
+                }
+                disabled={waitlistState?.hasOnboarded && waitlistState?.status === 'pending'}
               >
                 <LogIn className="h-4 w-4 md:mr-2" />
-                <span className="hidden sm:inline">Connect Spotify</span>
-                <span className="sm:hidden">Connect</span>
+                {!waitlistState?.hasOnboarded ? (
+                  <>
+                    <span className="hidden sm:inline">Join Waitlist</span>
+                    <span className="sm:hidden">Join Waitlist</span>
+                  </>
+                ) : waitlistState?.status === 'approved' ? (
+                  <>
+                    <span className="hidden sm:inline">Connect Spotify</span>
+                    <span className="sm:hidden">Connect</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="hidden sm:inline">Waitlist Pending</span>
+                    <span className="sm:hidden">Pending</span>
+                  </>
+                )}
               </Button>
             )}
             

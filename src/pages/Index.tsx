@@ -10,6 +10,8 @@ import { UserProfile } from "@/components/music/UserProfile"
 import { TrackCard } from "@/components/music/TrackCard"
 import { SearchTracks } from "@/components/music/SearchTracks"
 import { MusicVisualizer } from "@/components/music/MusicVisualizer"
+import { WaitlistForm } from "@/components/auth/WaitlistForm"
+import { WaitlistStatus } from "@/components/auth/WaitlistStatus"
 import { useAuth } from "@/contexts/AuthContext"
 import { apiService, type Track, type FormattedTrack, type RecommendationResponse, type UserPlaylist } from "@/services/api"
 import { Zap, Music2, Settings, Target, CheckCircle, RefreshCw, Loader2, Search } from "lucide-react"
@@ -29,7 +31,7 @@ const Index = () => {
   } = useAuth()
 
   const [selectedTracks, setSelectedTracks] = useState<Track[]>([])
-  const [currentView, setCurrentView] = useState<"landing" | "selection" | "recommendations">("landing")
+  const [currentView, setCurrentView] = useState<"landing" | "waitlist" | "selection" | "recommendations">("landing")
   const [isGenerating, setIsGenerating] = useState(false)
   const [isCollectingData, setIsCollectingData] = useState(false)
   const [isUpdatingPlaylist, setIsUpdatingPlaylist] = useState(false)
@@ -45,6 +47,12 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState("topTracksShort")
   const [searchQuery, setSearchQuery] = useState("")
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
+  
+  // Waitlist state
+  const [hasOnboarded, setHasOnboarded] = useState<boolean>(false)
+  const [waitlistEmail, setWaitlistEmail] = useState<string>('')
+  const [waitlistStatus, setWaitlistStatus] = useState<'pending' | 'approved' | null>(null)
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false)
   const [, forceUpdate] = useState(0)
   const [userTracks, setUserTracks] = useState<{
     topTracksShort: Track[];
@@ -62,7 +70,7 @@ const Index = () => {
   useEffect(() => {
     if (isAuthenticated && currentView === "landing") {
       setCurrentView("selection")
-    } else if (!isAuthenticated && currentView !== "landing") {
+    } else if (!isAuthenticated && currentView !== "landing" && currentView !== "waitlist") {
       setCurrentView("landing")
       setSelectedTracks([])
       setRecommendations([])
@@ -100,6 +108,44 @@ const Index = () => {
     return () => clearInterval(interval)
   }, [lastSyncTime])
 
+  // Initialize waitlist state from localStorage
+  useEffect(() => {
+    const initializeWaitlist = async () => {
+      const onboarded = localStorage.getItem('hasOnboarded') === 'true'
+      const email = localStorage.getItem('userEmail')
+      
+      setHasOnboarded(onboarded)
+      
+      if (onboarded && email) {
+        setWaitlistEmail(email)
+        
+        // Check current status
+        setIsCheckingStatus(true)
+        try {
+          const response = await fetch(`/api/waitlist/status/${encodeURIComponent(email)}`)
+          if (response.ok) {
+            const data = await response.json()
+            setWaitlistStatus(data.status)
+          } else if (response.status === 404) {
+            // Email not found, reset onboarding
+            localStorage.removeItem('hasOnboarded')
+            localStorage.removeItem('userEmail')
+            setHasOnboarded(false)
+            setWaitlistEmail('')
+          }
+        } catch (error) {
+          console.error('Error checking waitlist status:', error)
+        } finally {
+          setIsCheckingStatus(false)
+        }
+      }
+    }
+
+    if (!isAuthenticated) {
+      initializeWaitlist()
+    }
+  }, [isAuthenticated])
+
   // Load playlists when recommendations are generated
   useEffect(() => {
     if (currentView === "recommendations" && isAuthenticated && userPlaylists.length === 0) {
@@ -126,6 +172,24 @@ const Index = () => {
         variant: "destructive"
       })
     }
+  }
+
+  // Waitlist handlers
+  const handleEmailSubmitted = async (email: string, status: 'pending' | 'approved') => {
+    setHasOnboarded(true)
+    setWaitlistEmail(email)
+    setWaitlistStatus(status)
+    
+    toast({
+      title: status === 'approved' ? "🎉 You're approved!" : "✅ Joined waitlist",
+      description: status === 'approved' 
+        ? "You can now connect with Spotify to get started."
+        : "We'll review your application and notify you when approved.",
+    })
+  }
+
+  const handleSpotifyConnect = async () => {
+    await handleLogin()
   }
 
   const handleLogout = async () => {
@@ -361,6 +425,11 @@ const Index = () => {
           userName={profile?.display_name || null}
           onLogin={handleLogin}
           onLogout={handleLogout}
+          onWaitlistClick={() => setCurrentView("waitlist")}
+          waitlistState={{
+            hasOnboarded,
+            status: waitlistStatus
+          }}
         />
         
         <div 
@@ -394,21 +463,57 @@ const Index = () => {
                     </p>
                   </div>
 
-                  <div className="space-y-4">
-                    <Button 
-                      onClick={handleLogin}
-                      size="lg"
-                      className="spotify-button text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 animate-glow w-full sm:w-auto"
-                    >
-                      <Zap className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                      Connect with Spotify
-                    </Button>
-                    <p className="text-xs sm:text-sm text-gray-300 text-center lg:text-left">
-                      <span className="block sm:inline">• No account creation required</span>
-                      <span className="block sm:inline"> • Secure OAuth connection</span>
-                      <span className="block sm:inline"> • Instant recommendations</span>
-                    </p>
-                  </div>
+                  {/* Conditional content based on waitlist state */}
+                  {isCheckingStatus ? (
+                    <div className="flex items-center justify-center lg:justify-start space-x-2 text-gray-300">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Checking status...</span>
+                    </div>
+                  ) : !hasOnboarded ? (
+                    <div className="space-y-4">
+                      <Button 
+                        onClick={() => setCurrentView("waitlist")}
+                        size="lg"
+                        className="spotify-button text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 animate-glow w-full sm:w-auto"
+                      >
+                        <Zap className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                        Join Waitlist
+                      </Button>
+                      <p className="text-xs sm:text-sm text-gray-300 text-center lg:text-left">
+                        <span className="block sm:inline">• Early access program</span>
+                        <span className="block sm:inline"> • No spam, just updates</span>
+                        <span className="block sm:inline"> • Exclusive beta features</span>
+                      </p>
+                    </div>
+                  ) : waitlistStatus === 'approved' ? (
+                    <div className="space-y-4">
+                      <Button 
+                        onClick={handleSpotifyConnect}
+                        size="lg"
+                        className="spotify-button text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 animate-glow w-full sm:w-auto"
+                      >
+                        <Zap className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                        Connect with Spotify
+                      </Button>
+                      <p className="text-xs sm:text-sm text-green-300 text-center lg:text-left">
+                        <span className="block sm:inline">✅ You're approved!</span>
+                        <span className="block sm:inline"> • Secure OAuth connection</span>
+                        <span className="block sm:inline"> • Instant recommendations</span>
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                        <p className="text-yellow-300 text-center lg:text-left">
+                          <span className="block">⏳ You're on the waitlist!</span>
+                          <span className="block text-sm mt-1">We'll notify you when you're approved.</span>
+                        </p>
+                      </div>
+                      <p className="text-xs sm:text-sm text-gray-400 text-center lg:text-left">
+                        Already approved? Refresh this page to continue.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-6 sm:pt-8">
                     <div className="text-center">
@@ -420,8 +525,8 @@ const Index = () => {
                       <div className="text-xs sm:text-sm text-gray-300">Accuracy Rate</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-lg sm:text-2xl font-bold text-white">1M+</div>
-                      <div className="text-xs sm:text-sm text-gray-300">Happy Users</div>
+                      <div className="text-lg sm:text-2xl font-bold text-white">AI</div>
+                      <div className="text-xs sm:text-sm text-gray-300">Powered</div>
                     </div>
                   </div>
                 </div>
@@ -468,6 +573,55 @@ const Index = () => {
     )
   }
 
+  // Waitlist View
+  if (currentView === "waitlist") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header 
+          isAuthenticated={isAuthenticated}
+          userName={profile?.display_name || null}
+          onLogin={handleLogin}
+          onLogout={handleLogout}
+          onWaitlistClick={() => setCurrentView("waitlist")}
+          waitlistState={{
+            hasOnboarded,
+            status: waitlistStatus
+          }}
+        />
+        
+        <div 
+          className="relative min-h-[80vh] bg-cover bg-center bg-no-repeat flex items-center justify-center"
+          style={{ backgroundImage: `url(${heroBackground})` }}
+        >
+          <div className="absolute inset-0 bg-black/70" />
+          <div className="relative container mx-auto px-4 py-12">
+            <div className="max-w-lg mx-auto">
+              {!hasOnboarded ? (
+                <WaitlistForm onEmailSubmitted={handleEmailSubmitted} />
+              ) : (
+                <WaitlistStatus 
+                  email={waitlistEmail}
+                  status={waitlistStatus || 'pending'}
+                  onSpotifyConnect={waitlistStatus === 'approved' ? handleSpotifyConnect : undefined}
+                />
+              )}
+              
+              <div className="mt-8 text-center">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setCurrentView("landing")}
+                  className="text-gray-300 hover:text-white"
+                >
+                  ← Back to Home
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Track Selection View
   if (currentView === "selection") {
     return (
@@ -477,6 +631,11 @@ const Index = () => {
           userName={profile?.display_name || null}
           onLogin={handleLogin}
           onLogout={handleLogout}
+          onWaitlistClick={() => setCurrentView("waitlist")}
+          waitlistState={{
+            hasOnboarded,
+            status: waitlistStatus
+          }}
         />
         
         <div className="container mx-auto px-4 py-6 sm:py-8">
@@ -784,6 +943,10 @@ const Index = () => {
         userName={profile?.display_name || null}
         onLogin={handleLogin}
         onLogout={handleLogout}
+        waitlistState={{
+          hasOnboarded,
+          status: waitlistStatus
+        }}
       />
       
       <div className="container mx-auto px-4 py-6 sm:py-8">

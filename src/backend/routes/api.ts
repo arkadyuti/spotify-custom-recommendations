@@ -481,4 +481,76 @@ router.get('/user-playlists', async (req: Request, res: Response) => {
   }
 });
 
+// Waitlist endpoints
+router.post('/waitlist', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    const success = await storage.addToWaitlist(email);
+    
+    if (success) {
+      // Also check status immediately to return it
+      const status = await storage.getWaitlistStatus(email);
+      res.json({
+        success: true,
+        message: 'Successfully joined the waitlist!',
+        status: status?.status || 'pending'
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to join waitlist',
+        message: 'Please try again later'
+      });
+    }
+  } catch (error) {
+    console.error('Error in waitlist signup:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: (error as Error).message
+    });
+  }
+});
+
+router.get('/waitlist/status/:email', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.params;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email parameter is required' });
+    }
+
+    const waitlistEntry = await storage.getWaitlistStatus(email);
+    
+    if (waitlistEntry) {
+      res.json({
+        email: waitlistEntry.email,
+        status: waitlistEntry.status,
+        submittedAt: waitlistEntry.submittedAt,
+        approvedAt: waitlistEntry.approvedAt
+      });
+    } else {
+      res.status(404).json({
+        error: 'Email not found in waitlist',
+        status: 'not_found'
+      });
+    }
+  } catch (error) {
+    console.error('Error checking waitlist status:', error);
+    res.status(500).json({
+      error: 'Failed to check waitlist status',
+      message: (error as Error).message
+    });
+  }
+});
+
 export default router;

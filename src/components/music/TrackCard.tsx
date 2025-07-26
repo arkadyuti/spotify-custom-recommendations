@@ -26,7 +26,7 @@ export function TrackCard({
   track, 
   selectable = false, 
   onSelect, 
-  showPlayButton = true,
+  showPlayButton = false,
   variant = "full" 
 }: TrackCardProps) {
   const [isPlaying, setIsPlaying] = useState(false)

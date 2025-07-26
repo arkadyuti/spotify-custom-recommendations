@@ -30,6 +30,13 @@ export interface TracksData {
   lastUpdated: Date;
 }
 
+export interface WaitlistEntry {
+  email: string;
+  status: 'pending' | 'approved';
+  submittedAt: Date;
+  approvedAt?: Date;
+}
+
 export interface DataSummary {
   profile: {
     name: string;
@@ -54,7 +61,8 @@ export class DataStorageService {
     userData: 'userData',
     analysis: 'analysis', 
     tracks: 'tracks',
-    tokens: 'tokens'
+    tokens: 'tokens',
+    waitlist: 'waitlist'
   };
 
   async getDb(): Promise<Db> {
@@ -365,6 +373,80 @@ export class DataStorageService {
   async initStorage(): Promise<void> {
     // No need to create directories with MongoDB
     console.log('MongoDB storage initialized');
+  }
+
+  // Waitlist management methods
+  async addToWaitlist(email: string): Promise<boolean> {
+    try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.waitlist);
+      
+      // Check if email already exists
+      const existing = await collection.findOne({ email: email.toLowerCase() });
+      if (existing) {
+        console.log(`Email ${email} already in waitlist`);
+        return true; // Don't treat as error
+      }
+      
+      const waitlistEntry: WaitlistEntry = {
+        email: email.toLowerCase(),
+        status: 'pending',
+        submittedAt: new Date()
+      };
+      
+      await collection.insertOne(waitlistEntry);
+      console.log(`✉️ Added ${email} to waitlist`);
+      return true;
+    } catch (error) {
+      console.error('Error adding to waitlist:', error);
+      return false;
+    }
+  }
+
+  async getWaitlistStatus(email: string): Promise<WaitlistEntry | null> {
+    try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.waitlist);
+      
+      const entry = await collection.findOne({ email: email.toLowerCase() });
+      
+      if (entry) {
+        const { _id, ...waitlistData } = entry;
+        return waitlistData as WaitlistEntry;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting waitlist status:', error);
+      return null;
+    }
+  }
+
+  async approveWaitlistEmail(email: string): Promise<boolean> {
+    try {
+      const db = await this.getDb();
+      const collection = db.collection(this.collections.waitlist);
+      
+      const result = await collection.updateOne(
+        { email: email.toLowerCase() },
+        { 
+          $set: { 
+            status: 'approved',
+            approvedAt: new Date()
+          }
+        }
+      );
+      
+      if (result.matchedCount > 0) {
+        console.log(`✅ Approved waitlist entry for ${email}`);
+        return true;
+      } else {
+        console.log(`⚠️ Email ${email} not found in waitlist`);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error approving waitlist email:', error);
+      return false;
+    }
   }
 }
 

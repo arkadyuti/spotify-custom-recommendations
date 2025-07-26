@@ -30,6 +30,7 @@ export interface LeanArtist {
 export interface LeanProfile {
   id: string;
   display_name: string;
+  email?: string;
   country?: string;
   image?: string; // Best quality image URL
 }
@@ -92,6 +93,7 @@ export function transformProfile(spotifyProfile: any): LeanProfile {
   return {
     id: spotifyProfile.id,
     display_name: spotifyProfile.display_name || 'Unknown',
+    email: spotifyProfile.email,
     country: spotifyProfile.country,
     image: getBestImage(spotifyProfile.images)
   };
