@@ -1,8 +1,8 @@
 name: Deploy Spotify
 on:
   push:
-    branches: [ main ]  # Change this to match your main branch name if different
-  workflow_dispatch:    # Allows manual workflow runs
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -11,15 +11,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up SSH
+        uses: shimataro/ssh-key-action@v2
         with:
-          node-version: '18'
-          cache: 'yarn'
-          cache-dependency-path: yarn.lock
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: 'just-a-placeholder'
 
-      - name: Check Yarn version
-        run: yarn --version
+      - name: Add remote host to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify SSH connection
+        run: |
+          echo "Testing SSH connection..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo 'SSH connection successful' && mkdir -p ~/services/spotify ~/services/docker-images"
 
       - name: Create .env file
         run: |
@@ -47,19 +54,6 @@ jobs:
       - name: Load Docker image
         run: docker load -i /tmp/spotify-image.tar
 
-      - name: Set up SSH
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: 'just-a-placeholder'
-
-      - name: Add remote host to known hosts
-        run: |
-          mkdir -p ~/.ssh
-          echo "Adding ${{ secrets.SSH_HOST }} to known hosts..."
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-
       - name: Compress Docker image
         run: |
           echo "Compressing Docker image..."
@@ -69,52 +63,47 @@ jobs:
       - name: Transfer Docker image to server
         run: |
           echo "Transferring Docker image to server..."
-          scp -o StrictHostKeyChecking=no spotify-image.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/services/spotify-image.tar.gz
-          scp -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/services/spotify/docker-compose.yml
+          scp -o StrictHostKeyChecking=no spotify-image.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/arka/services/docker-images/spotify-image.tar.gz
+          scp -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/arka/services/spotify/docker-compose.yml
+          scp -o StrictHostKeyChecking=no .env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/arka/services/spotify/.env
 
       - name: Deploy to production
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            # Force using bash instead of fish
             bash -c '
-            # Navigate to the services directory
-            cd /root/services/
-          
-            # Create spotify directory if it doesn not exist
+            cd /home/arka/services/
+
             mkdir -p spotify
             cd spotify
 
             # Stop the current container
             docker compose down || true
-            
+
             # Load the new Docker image
             echo "Loading Docker image..."
-            docker load < /root/services/spotify-image.tar.gz
-            
-            # Remove the transferred image file
-            rm -f /root/services/spotify-image.tar.gz
-          
+            gunzip -c /home/arka/services/docker-images/spotify-image.tar.gz | docker load
+
             # Start the container using the new image
             echo "Starting container..."
             docker compose up -d
-          
+
             # Wait for container to be fully running
             echo "Waiting for container to be ready..."
             attempt=1
             max_attempts=30
-          
+
             until [ $attempt -gt $max_attempts ] || docker container inspect spotify --format="{{.State.Running}}" 2>/dev/null | grep -q "true"; do
               echo "Attempt $attempt/$max_attempts: Container not ready yet, waiting..."
               sleep 2
               attempt=$((attempt+1))
             done
-          
+
             if [ $attempt -gt $max_attempts ]; then
               echo "Container failed to start properly within time limit!"
               docker compose logs
               exit 1
             fi
-          
+
             # Further verification of application health
             echo "Verifying application health..."
             timeout=120
@@ -128,15 +117,13 @@ jobs:
               echo "Waiting for application to respond..."
               sleep 10
             done
-          
+
             if ! curl -s http://localhost:3005/ > /dev/null; then
               echo "Application failed to respond within timeout!"
               docker compose logs
               exit 1
             fi
-          
-            # Clean up is already done above
-          
+
             # Verify deployment
             echo "Deployment successful! Container is running and application is responding."
             docker ps | grep spotify
